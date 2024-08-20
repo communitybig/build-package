@@ -305,6 +305,29 @@ jobs:
             sleep 10
           done
 
+  
+      # Runs only if previous steps were successful
+      - name: Update Repository Database
+        if: success()  # Executa apenas se os passos anteriores foram bem-sucedidos
+        shell: bash
+        run: |
+          ssh ${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }} -p ${{ secrets.PKGBUILD_PORT }} "
+            cd ${{ secrets.PKGBUILD_DIR }}/$branch/x86_64 &&
+            repo-add -n -R community.db.tar.gz *.pkg.tar.zst
+          "
+  
+  
+      # Keeps only the most recent package
+      - name: Clean Old Packages
+        if: success()
+        shell: bash
+        run: |
+          ssh ${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }} -p ${{ secrets.PKGBUILD_PORT }} "
+            cd ${{ secrets.PKGBUILD_DIR }}/$branch/x86_64 &&
+            paccache -rk1
+          "
+  
+  
       # Send a Telegram alert if the build fails
       - name: Telegram Alert Fail
         if: ${{ failure() }}
