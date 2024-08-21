@@ -29,16 +29,20 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: biglinux_build_package:latest
+      image: talesam/community-build:1.0
       options: --privileged
-      volumes:
-        - /opt:/lixo/opt
-        - /usr:/lixo/usr
-        - /var:/lixo/var
     steps:
       # Check out the repository
       - uses: actions/checkout@v4
 
+  
+      # Check image version
+      - name: Check image version
+        run: |
+          echo "Community Build Image Version:"
+          docker inspect --format='{{index .Config.Labels "version"}}' $(cat /etc/hostname)
+  
+  
       # Set environment variables
       - name: Set ENVs
         shell: bash
@@ -72,48 +76,7 @@ jobs:
           echo "url: $url"
           echo "git_branch: $git_branch"
           echo "manjaro_branch: $manjaro_branch"
-          
-      # Clean the system to free up space
-      - name: Clean System
-        shell: bash -O extglob {0}
-        run: |
-          df -h
-          docker image prune --all --force
-          rm -rf \
-          /lixo/opt/google \
-          /lixo/opt/pipx \
-          /lixo/opt/microsoft \
-          /lixo/opt/az \
-          /lixo/opt/hostedtoolcache \
-          /lixo/usr/local/.ghcup \
-          /lixo/usr/share/dotnet \
-          /lixo/usr/share/swift \
-          /lixo/usr/share/dotnet \
-          /lixo/usr/share/miniconda \
-          /lixo/usr/local/lib/android \
-          /lixo/usr/local/lib/node_modules \
-          /lixo/usr/lib/snapd \
-          /lixo/usr/lib/modules \
-          /lixo/usr/lib/python3 \
-          /lixo/usr/lib/firefox \
-          /lixo/usr/lib/heroku \
-          /lixo/usr/lib/mono \
-          /lixo/usr/lib/llvm-13 \
-          /lixo/usr/lib/llvm-14 \
-          /lixo/usr/lib/llvm-15 \
-          /lixo/usr/lib/gcc \
-          /lixo/usr/lib/google-cloud-sdk \
-          /lixo/usr/lib/jvm \
-          /lixo/usr/local/doc \
-          /lixo/usr/local/sqlpackage \
-          /lixo/usr/local/n \
-          /lixo/usr/local/aws-sam-cli \
-          /lixo/usr/local/aws-cli \
-          /lixo/usr/local/julia1.10.3 \
-          /lixo/usr/local/share/vcpkg \
-          /lixo/usr/local/share/chromium \
-          /lixo/usr/local/share/powershell
-          df -h
+  
 
       # Setup tmate session for debugging if enabled
       - name: Setup tmate session
