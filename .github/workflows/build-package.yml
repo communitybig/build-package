@@ -5,24 +5,35 @@ name: Build Package
 on:
   # Triggered by repository_dispatch event
   repository_dispatch:
-    types:
-      - AUR/*
-      - URL/*
-      - community/*
+    types: [build_package]
 
   # Allows manual triggering of the workflow
   workflow_dispatch:
     inputs:
+      branch_type:
+        description: 'Branch type (testing or stable)'
+        required: true
+        type: choice
+        options:
+          - testing
+          - stable
+      new_branch:
+        description: 'Nome do novo branch'
+        required: true
+        type: string
       debug_enabled:
         type: boolean
         description: 'With TMATE'
         required: false
         default: true
 
+
 # Environment variables used throughout the workflow
 env:
   gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
   gpg_passphrase: ${{ secrets.PASSPHRASE }}
+  BRANCH_TYPE: ${{ github.event.inputs.branch_type }}
+  NEW_BRANCH: ${{ github.event.inputs.new_branch }}
 
 # Define the jobs to be run
 jobs:
@@ -34,7 +45,16 @@ jobs:
     steps:
       # Check out the repository
       - uses: actions/checkout@v4
-
+        with:
+          fetch-depth: 0
+  
+  
+      # Checkout to the specified or default branch
+      - name: Checkout to specified branch
+        run: |
+          git fetch --all
+          git checkout ${{ github.event.client_payload.branch || github.ref }}
+  
   
       # Check image version
       - name: Check image version
@@ -137,23 +157,24 @@ jobs:
           cd $gitfolder
           
           # Checkout the correct branch for communitybig repos
-          if [ -n "$(grep https://github.com/communitybig/ <<< $url)" ]; then
-            git checkout $git_branch
-            sed -i '/source=/s/\.git"/\.git#branch='$git_branch'"/' PKGBUILD
+          if [ -n "$(grep https://github.com/communitybig/ <<< ${{ github.repository }})" ]; then
+            git checkout ${{ github.event.client_payload.branch || github.ref }}
+            sed -i '/source=/s/\.git"/\.git#branch=${{ github.event.client_payload.branch || github.ref }}"/' PKGBUILD
           fi
           
           # Set architecture
           pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
-          if [ "$pkgArch" = "any" ];then
+          if [ "$pkgArch" = "any" ]; then
             sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
           fi
           
           # Build for x86_64
-          if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ];then
+          if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
             echo -e "\033[01;31mBuild x86_64\033[0m"
-            sudo -u builduser bash -c "sudo chrootbuild -H -p . -b $manjaro_branch"
+            sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ github.event.client_payload.type || 'stable' }}"
           fi
 
+          
       # Rename the package if necessary
       - name: Rename Package
         shell: bash -O extglob {0}
