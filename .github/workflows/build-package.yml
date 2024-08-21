@@ -271,12 +271,22 @@ jobs:
   
       # Runs only if previous steps were successful
       - name: Update Repository Database
-        if: success()  # Executa apenas se os passos anteriores foram bem-sucedidos
+        if: success()  # Runs only if the previous steps were successful
         shell: bash
         run: |
+          # Determine the database name based on the branch
+          if [ "$branch" == "community-testing" ]; then
+            db_name="community-testing"
+          elif [ "$branch" == "community-stable" ]; then
+            db_name="community-stable"
+          else
+            echo "Error: Unknown branch: $branch"
+            exit 1
+          fi
+
           ssh ${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }} -p ${{ secrets.PKGBUILD_PORT }} "
             cd ${{ secrets.PKGBUILD_DIR }}/$branch/x86_64 &&
-            repo-add -n -R community.db.tar.gz *.pkg.tar.zst
+            repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
           "
   
   
