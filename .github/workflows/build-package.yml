@@ -32,8 +32,8 @@ on:
 env:
   gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
   gpg_passphrase: ${{ secrets.PASSPHRASE }}
-  BRANCH_TYPE: ${{ github.event.inputs.branch_type }}
-  NEW_BRANCH: ${{ github.event.inputs.new_branch }}
+  BRANCH_TYPE: ${{ github.event.client_payload.type || github.event.inputs.branch_type }}
+  NEW_BRANCH: ${{ github.event.client_payload.branch || github.event.inputs.new_branch }}
 
 # Define the jobs to be run
 jobs:
@@ -53,7 +53,7 @@ jobs:
       - name: Checkout to specified branch
         run: |
           git fetch --all
-          git checkout ${{ github.event.client_payload.branch || github.ref }}
+          git checkout ${{ env.NEW_BRANCH }}
   
   
       # Check image version
@@ -156,12 +156,6 @@ jobs:
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
           cd $gitfolder
           
-          # Checkout the correct branch for communitybig repos
-          if [ -n "$(grep https://github.com/communitybig/ <<< ${{ github.repository }})" ]; then
-            git checkout ${{ github.event.client_payload.branch || github.ref }}
-            sed -i '/source=/s/\.git"/\.git#branch=${{ github.event.client_payload.branch || github.ref }}"/' PKGBUILD
-          fi
-          
           # Set architecture
           pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
           if [ "$pkgArch" = "any" ]; then
@@ -171,7 +165,7 @@ jobs:
           # Build for x86_64
           if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
             echo -e "\033[01;31mBuild x86_64\033[0m"
-            sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ github.event.client_payload.type || 'stable' }}"
+            sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ env.BRANCH_TYPE }}"
           fi
 
           
