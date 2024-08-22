@@ -49,6 +49,11 @@ jobs:
           fetch-depth: 0
   
   
+      # Add the repository directory as safe
+      - name: Add safe directory
+        run: git config --global --add safe.directory /__w/build-package/build-package
+  
+  
       # Checkout to the specified or default branch
       - name: Checkout to specified branch
         run: |
