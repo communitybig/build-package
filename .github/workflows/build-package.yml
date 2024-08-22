@@ -54,11 +54,20 @@ jobs:
         run: git config --global --add safe.directory /__w/build-package/build-package
   
   
-      # Checkout to the specified or default branch
-      - name: Checkout to specified branch
+      - name: Fetch all branches
         run: |
           git fetch --all
-          git checkout ${{ env.NEW_BRANCH }}
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*'
+  
+  
+      # Checkout to specified branch or create if not exists
+      - name: Checkout to specified branch or create if not exists
+        run: |
+          if git ls-remote --exit-code --heads origin ${{ env.NEW_BRANCH }}; then
+            git checkout ${{ env.NEW_BRANCH }}
+          else
+            git checkout -b ${{ env.NEW_BRANCH }}
+          fi
   
   
       # Check image version
