@@ -70,13 +70,6 @@ jobs:
           fi
   
   
-      # Check image version
-      - name: Check image version
-        run: |
-          echo "Community Build Image Version:"
-          docker inspect --format='{{index .Config.Labels "version"}}' $(cat /etc/hostname)
-  
-  
       # Set environment variables
       - name: Set ENVs
         shell: bash
