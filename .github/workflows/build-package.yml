@@ -21,6 +21,10 @@ on:
         description: 'Nome do novo branch'
         required: true
         type: string
+      package_name:
+        description: 'Nome do pacote'
+        required: true
+        type: string
       debug_enabled:
         type: boolean
         description: 'With TMATE'
@@ -34,6 +38,7 @@ env:
   gpg_passphrase: ${{ secrets.PASSPHRASE }}
   BRANCH_TYPE: ${{ github.event.client_payload.type || github.event.inputs.branch_type }}
   NEW_BRANCH: ${{ github.event.client_payload.branch || github.event.inputs.new_branch }}
+  PACKAGE_NAME: ${{ github.event.client_payload.package_name || github.event.inputs.package_name }}
 
 # Define the jobs to be run
 jobs:
@@ -42,6 +47,7 @@ jobs:
     container:
       image: talesam/community-build:1.1
       options: --privileged
+      name: Build ${{ env.PACKAGE_NAME }}
     steps:
       # Check out the repository
       - uses: actions/checkout@v4
@@ -253,6 +259,7 @@ jobs:
             find -iname "*$i" -exec gh release upload ${release} --repo ${repo} --clobber {} \;
           done
 
+          
       # Push the package to the repository
       - name: Push to Repo
         shell: bash
@@ -281,12 +288,16 @@ jobs:
             lastCommit=$(git log -2 --format="%an <%ae>")
           fi
           
-          # Set the branch to community-testing
-          branch=community-testing
+          # Set the branch based on BRANCH_TYPE
+          if [ "${{ env.BRANCH_TYPE }}" == "stable" ]; then
+            branch="stable"
+          else
+            branch="testing"
+          fi
           
           # Upload the package files
           for i in *.zst *.sig *.md5; do
-            test -e $i && rsync -vapz -e "ssh -p ${{ secrets.PKGBUILD_PORT }}" $i ${{ secrets.PKGBUILD_USER }}@$ip:${{ secrets.PKGBUILD_DIR }}/$branch/x86_64
+            test -e $i && rsync -vapz -e "ssh -p ${{ secrets.PKGBUILD_PORT }}" $i ${{ secrets.PKGBUILD_USER }}@$ip:${{ secrets.PKGBUILD_DIR }}/$branch/x86_64/
             sleep 10
           done
 
