@@ -43,11 +43,11 @@ env:
 # Define the jobs to be run
 jobs:
   build:
+    name: Build ${{ env.PACKAGE_NAME }}
     runs-on: ubuntu-latest
     container:
       image: talesam/community-build:1.1
       options: --privileged
-      name: Build ${{ env.PACKAGE_NAME }}
     steps:
       # Check out the repository
       - uses: actions/checkout@v4
