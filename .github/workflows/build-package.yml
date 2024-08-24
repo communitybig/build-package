@@ -326,7 +326,7 @@ jobs:
             ls -la  # Lista o conteúdo do diretório para verificação
             repo-add -n -R "$db_name.db.tar.gz" *.pkg.tar.zst
             echo "Comando repo-add concluído com código de saída: $?"
-EOF
+          EOF
   
   
       # Keeps only the most recent package
