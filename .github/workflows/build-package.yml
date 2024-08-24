@@ -5,7 +5,7 @@ name: Build Package
 on:
   # Triggered by repository_dispatch event
   repository_dispatch:
-    types: [build_package]
+    types: ['*']
 
   # Allows manual triggering of the workflow
   workflow_dispatch:
@@ -34,6 +34,7 @@ env:
   gpg_passphrase: ${{ secrets.PASSPHRASE }}
   BRANCH_TYPE: ${{ github.event.client_payload.type || github.event.inputs.branch_type }}
   NEW_BRANCH: ${{ github.event.client_payload.branch || github.event.inputs.new_branch }}
+  PACKAGE_NAME: ${{ github.event.action }}
 
 # Define the jobs to be run
 jobs:
