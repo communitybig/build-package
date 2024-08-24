@@ -36,6 +36,7 @@ env:
   NEW_BRANCH: ${{ github.event.client_payload.branch || github.event.inputs.new_branch }}
   PACKAGE_NAME: ${{ github.event.action }}
 
+
 # Define the jobs to be run
 jobs:
   build:
@@ -50,6 +51,7 @@ jobs:
           fetch-depth: 0
   
   
+      # Initialize SSH agent and add private key
       - name: Setup SSH Agent
         env:
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
@@ -105,7 +107,8 @@ jobs:
           else
             echo "community_branch=${{ github.event.client_payload.community_branch }}" >> $GITHUB_ENV
           fi
-          
+  
+  
       # Echo the set environment variables
       - name: echo PayLoads
         shell: bash
@@ -122,6 +125,7 @@ jobs:
         with:
           install-dependencies: false
 
+  
       # Make changes to the system configuration
       - name: Changes in System
         shell: bash
@@ -154,12 +158,14 @@ jobs:
           sed -i 's|https://repo.manjaro.org/repo|https://nnenix.mm.fcix.net/manjaro|' /usr/lib/manjaro-chrootbuild/util.sh
           sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
 
+  
       # Download the source code
       - name: Download Source
         shell: bash
         run: |
           git clone $url.git
 
+  
       # Build the package
       - name: Build
         shell: bash
@@ -185,7 +191,7 @@ jobs:
             sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ env.BRANCH_TYPE }}"
           fi
 
-          
+  
       # Rename the package if necessary
       - name: Rename Package
         shell: bash -O extglob {0}
@@ -198,6 +204,7 @@ jobs:
             fi
           done
 
+  
       # Sign the package
       - name: Sign Package
         shell: bash -O extglob {0}
@@ -209,6 +216,7 @@ jobs:
             gpg --pinentry-mode loopback --passphrase "$gpg_passphrase" --detach-sign ${p}
           done
 
+  
       # Generate checksums for the package
       - name: CheckSum
         shell: bash -O extglob {0}
@@ -222,6 +230,7 @@ jobs:
           bash md5.sh
           rm md5.sh
 
+  
       # Publish the package on GitHub
       - name: Publish Package on GitHub
         shell: bash
@@ -240,7 +249,7 @@ jobs:
           if [ "$(grep github-actions <<< $lastCommit)" ];then
             lastCommit=$(git log -2 --format="%an <%ae>")
           fi
-
+          
           # Set up GitHub authentication and determine the repository
           if [ -n "$(grep -i communitybig <<< $url)" ];then
             echo ${{ secrets.TOKEN_RELEASE }} | gh auth login --with-token
@@ -263,7 +272,7 @@ jobs:
             find -iname "*$i" -exec gh release upload ${release} --repo ${repo} --clobber {} \;
           done
 
-          
+  
       # Push the package to the repository
       - name: Push to Repo
         shell: bash
@@ -279,7 +288,7 @@ jobs:
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
           cd $gitfolder
           ls -lh
-
+          
           # Determine the last committer
           lastCommit=$(git log -1 --format="%an <%ae>")
           if [ "$(grep github-actions <<< $lastCommit)" ];then
@@ -288,18 +297,27 @@ jobs:
           
           # Set the branch based on BRANCH_TYPE
           if [ "${{ env.BRANCH_TYPE }}" == "stable" ]; then
-            branch="stable"
+            branch="STABLE"
           else
-            branch="testing"
+            branch="TESTING"
           fi
           
           # Upload the package files
-          for i in *.zst *.sig *.md5; do
-            test -e $i && rsync -vapz -e "ssh -p ${{ secrets.PKGBUILD_PORT }}" $i ${{ secrets.PKGBUILD_USER }}@$ip:${{ secrets.PKGBUILD_DIR }}/$branch/x86_64/
-            sleep 10
+          for i in *.zst; do
+            pkgname=$(basename $i)
+            echo "📦 Pacote $pkgname sendo enviado para o repositório 🚀 $branch 🎯"
+            rsync -vapz -e "ssh -p ${{ secrets.PKGBUILD_PORT }}" $i ${{ secrets.PKGBUILD_USER }}@$ip:${{ secrets.PKGBUILD_DIR }}/${branch,,}/x86_64/
+            if [ $? -eq 0 ]; then
+              curl -X POST -H 'Content-Type: application/json' -d "{\"chat_id\": \"${{ secrets.CHAT_ID }}\", \"text\": \"✅ Pacote $pkgname enviado com sucesso para o repositório $branch\"}" ${{ secrets.TOKEN_BOT }}
+            else
+              curl -X POST -H 'Content-Type: application/json' -d "{\"chat_id\": \"${{ secrets.CHAT_ID }}\", \"text\": \"❌ Falha ao enviar o pacote $pkgname para o repositório $branch\"}" ${{ secrets.TOKEN_BOT }}
+            fi
+          done
+          for i in *.sig *.md5; do
+            rsync -vapz -e "ssh -p ${{ secrets.PKGBUILD_PORT }}" $i ${{ secrets.PKGBUILD_USER }}@$ip:${{ secrets.PKGBUILD_DIR }}/${branch,,}/x86_64/
           done
 
-          
+  
       # Runs only if previous steps were successful
       - name: Update Repository Database
         if: success()  # Runs only if the previous steps were successful
@@ -307,26 +325,40 @@ jobs:
         run: |
           # Determine the database name based on the branch type
           if [ "$BRANCH_TYPE" == "testing" ]; then
-            branch="testing"
+            branch="TESTING"
             db_name="community-testing"
           elif [ "$BRANCH_TYPE" == "stable" ]; then
-            branch="community-stable"
+            branch="STABLE"
             db_name="stable"
           else
             echo "Error: Unknown branch type: $BRANCH_TYPE"
             exit 1
           fi
-
+          
           echo "Branch: $branch"
           echo "Database name: $db_name"
+          
+          echo "🔄 Sincronizando o banco de dados do repositório $branch..."
+          curl -X POST -H 'Content-Type: application/json' -d "{\"chat_id\": \"${{ secrets.CHAT_ID }}\", \"text\": \"🔄 Iniciando sincronização do banco de dados do repositório $branch...\"}" ${{ secrets.TOKEN_BOT }}
 
           ssh -v ${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }} -p ${{ secrets.PKGBUILD_PORT }} << EOF
             set -x
-            cd ${{ secrets.PKGBUILD_DIR }}/$branch/x86_64
+            cd ${{ secrets.PKGBUILD_DIR }}/${branch,,}/x86_64
             repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
-            echo "Comando repo-add concluído com código de saída: \$?"
+            exit_code=\$?
+            echo "Comando repo-add concluído com código de saída: \$exit_code"
+            exit \$exit_code
           EOF
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Sincronização do banco de dados concluída com sucesso!"
+            curl -X POST -H 'Content-Type: application/json' -d "{\"chat_id\": \"${{ secrets.CHAT_ID }}\", \"text\": \"✅ Sincronização do banco de dados do repositório $branch concluída com sucesso!\"}" ${{ secrets.TOKEN_BOT }}
+          else
+            echo "❌ Falha na sincronização do banco de dados."
+            curl -X POST -H 'Content-Type: application/json' -d "{\"chat_id\": \"${{ secrets.CHAT_ID }}\", \"text\": \"❌ Falha na sincronização do banco de dados do repositório $branch.\"}" ${{ secrets.TOKEN_BOT }}
+          fi
 
+  
       # Keeps only the most recent package
       - name: Clean Old Packages
         if: success()
@@ -334,11 +366,11 @@ jobs:
         run: |
           ssh ${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }} -p ${{ secrets.PKGBUILD_PORT }} << EOF
             set -x
-            cd ${{ secrets.PKGBUILD_DIR }}/$branch/x86_64
+            cd ${{ secrets.PKGBUILD_DIR }}/${branch,,}/x86_64
             paccache -rk1
             echo "Comando paccache concluído com código de saída: \$?"
           EOF
-  
+
   
       # Send a Telegram alert if the build fails
       - name: Telegram Alert Fail
