@@ -5,7 +5,9 @@ name: Build Package
 on:
   # Triggered by repository_dispatch event
   repository_dispatch:
-    types: [build_package]
+    types: 
+      - build_package
+      - 'build_*'  # This will match any event type starting with "build_"
 
   # Allows manual triggering of the workflow
   workflow_dispatch:
@@ -43,12 +45,15 @@ env:
 # Define the jobs to be run
 jobs:
   build:
-    name: Build ${{ env.PACKAGE_NAME }}
+    name: Build Package
     runs-on: ubuntu-latest
     container:
       image: talesam/community-build:1.1
       options: --privileged
     steps:
+      - name: Display Package Name
+        run: echo "Building package: ${{ env.PACKAGE_NAME }}"
+  
       # Check out the repository
       - uses: actions/checkout@v4
         with:
