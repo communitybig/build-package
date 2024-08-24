@@ -345,7 +345,7 @@ jobs:
             db_name="community-testing"
           elif [ "$BRANCH_TYPE" == "stable" ]; then
             branch="STABLE"
-            db_name="stable"
+            db_name="community-stable"
           else
             echo "Error: Unknown branch type: $BRANCH_TYPE"
             exit 1
