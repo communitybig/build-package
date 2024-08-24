@@ -295,6 +295,10 @@ jobs:
           done
 
   
+      # Verificar se a chave SSH ainda está carregada
+      - name: Verificar chave SSH
+        run: ssh-add -l
+
       # Runs only if previous steps were successful
       - name: Update Repository Database
         if: success()  # Runs only if the previous steps were successful
@@ -315,10 +319,14 @@ jobs:
           echo "Branch: $branch"
           echo "Database name: $db_name"
 
-          ssh ${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }} -p ${{ secrets.PKGBUILD_PORT }} "
-            cd ${{ secrets.PKGBUILD_DIR }}/$branch/x86_64 &&
-            repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
-          "
+          # Adicionar verbosidade ao SSH para diagnóstico
+          ssh -v -i /root/.ssh/github_actions "${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }}" -p "${{ secrets.PKGBUILD_PORT }}" << 'EOF'
+            set -x  # Ativa o modo de depuração do shell
+            cd "${{ secrets.PKGBUILD_DIR }}/$branch/x86_64"
+            ls -la  # Lista o conteúdo do diretório para verificação
+            repo-add -n -R "$db_name.db.tar.gz" *.pkg.tar.zst
+            echo "Comando repo-add concluído com código de saída: $?"
+EOF
   
   
       # Keeps only the most recent package
