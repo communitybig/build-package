@@ -313,7 +313,7 @@ jobs:
           # Upload the package files
           for i in *.zst; do
             pkgname=$(basename $i)
-            echo "📦 Pacote $pkgname sendo enviado para o repositório 🚀 $branch 🎯"
+            send_telegram_message "📦 Pacote $pkgname sendo enviado para o repositório 🚀 $branch 🎯"
             rsync -vapz -e "ssh -p ${{ secrets.PKGBUILD_PORT }}" $i ${{ secrets.PKGBUILD_USER }}@$ip:${{ secrets.PKGBUILD_DIR }}/${branch,,}/x86_64/
             if [ $? -eq 0 ]; then
               send_telegram_message "✅ Pacote $pkgname enviado com sucesso para o repositório $branch"
