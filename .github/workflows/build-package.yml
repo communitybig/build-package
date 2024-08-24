@@ -41,14 +41,25 @@ env:
   PACKAGE_NAME: ${{ github.event.client_payload.package_name || github.event.inputs.package_name }}
 
 # Define the jobs to be run
+# Define the jobs to be run
 jobs:
   build:
     name: Build Package
+    # Only run this job for repository_dispatch or workflow_dispatch events
+    if: github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     container:
       image: talesam/community-build:1.1
       options: --privileged
     steps:
+      - name: Set build name
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "GITHUB_WORKFLOW_NAME=Build ${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
+          else
+            echo "GITHUB_WORKFLOW_NAME=Build ${{ github.event.inputs.package_name }}" >> $GITHUB_ENV
+          fi
+
       - name: Display Package Name
         run: echo "Building package: ${{ env.PACKAGE_NAME }}"
   
