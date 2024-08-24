@@ -49,6 +49,15 @@ jobs:
           fetch-depth: 0
   
   
+      - name: Setup SSH Agent
+        env:
+          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+        run: |
+          ssh-agent -a $SSH_AUTH_SOCK > /dev/null
+          ssh-add - <<< "${{ secrets.PKGBUILD_KEY }}"
+          echo "SSH_AUTH_SOCK=/tmp/ssh_agent.sock" >> $GITHUB_ENV
+  
+  
       # Add the repository directory as safe
       - name: Add safe directory
         run: git config --global --add safe.directory /__w/build-package/build-package
@@ -253,6 +262,7 @@ jobs:
             find -iname "*$i" -exec gh release upload ${release} --repo ${repo} --clobber {} \;
           done
 
+          
       # Push the package to the repository
       - name: Push to Repo
         shell: bash
@@ -261,12 +271,6 @@ jobs:
           LC_ALL: en_US.UTF-8
         run: |
           # Set up SSH
-          mkdir -p /root/.ssh
-          > /root/.ssh/github_actions
-          chmod 600 /root/.ssh/github_actions
-          echo "${{ secrets.PKGBUILD_KEY }}" >> /root/.ssh/github_actions
-          eval `ssh-agent -s`
-          ssh-add /root/.ssh/github_actions
           ssh-keyscan -t rsa -p ${{ secrets.PKGBUILD_PORT }} ${{ secrets.PKGBUILD_HOST }} >> /root/.ssh/known_hosts
           ip=${{ secrets.PKGBUILD_HOST }}
           
@@ -294,11 +298,7 @@ jobs:
             sleep 10
           done
 
-  
-      # Verificar se a chave SSH ainda está carregada
-      - name: Verificar chave SSH
-        run: ssh-add -l
-
+          
       # Runs only if previous steps were successful
       - name: Update Repository Database
         if: success()  # Runs only if the previous steps were successful
@@ -319,25 +319,24 @@ jobs:
           echo "Branch: $branch"
           echo "Database name: $db_name"
 
-          # Adicionar verbosidade ao SSH para diagnóstico
-          ssh -v -i /root/.ssh/github_actions "${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }}" -p "${{ secrets.PKGBUILD_PORT }}" << 'EOF'
-            set -x  # Ativa o modo de depuração do shell
-            cd "${{ secrets.PKGBUILD_DIR }}/$branch/x86_64"
-            ls -la  # Lista o conteúdo do diretório para verificação
-            repo-add -n -R "$db_name.db.tar.gz" *.pkg.tar.zst
-            echo "Comando repo-add concluído com código de saída: $?"
+          ssh -v ${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }} -p ${{ secrets.PKGBUILD_PORT }} << EOF
+            set -x
+            cd ${{ secrets.PKGBUILD_DIR }}/$branch/x86_64
+            repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
+            echo "Comando repo-add concluído com código de saída: \$?"
           EOF
-  
-  
+
       # Keeps only the most recent package
       - name: Clean Old Packages
         if: success()
         shell: bash
         run: |
-          ssh ${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }} -p ${{ secrets.PKGBUILD_PORT }} "
-            cd ${{ secrets.PKGBUILD_DIR }}/$branch/x86_64 &&
+          ssh ${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }} -p ${{ secrets.PKGBUILD_PORT }} << EOF
+            set -x
+            cd ${{ secrets.PKGBUILD_DIR }}/$branch/x86_64
             paccache -rk1
-          "
+            echo "Comando paccache concluído com código de saída: \$?"
+          EOF
   
   
       # Send a Telegram alert if the build fails
