@@ -5,9 +5,7 @@ name: Build Package
 on:
   # Triggered by repository_dispatch event
   repository_dispatch:
-    types: 
-      - build_package
-      - 'build_*'  # This will match any event type starting with "build_"
+    types: [build_package]
 
   # Allows manual triggering of the workflow
   workflow_dispatch:
