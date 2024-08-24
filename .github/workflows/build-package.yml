@@ -21,10 +21,6 @@ on:
         description: 'Nome do novo branch'
         required: true
         type: string
-      package_name:
-        description: 'Nome do pacote'
-        required: true
-        type: string
       debug_enabled:
         type: boolean
         description: 'With TMATE'
@@ -38,31 +34,15 @@ env:
   gpg_passphrase: ${{ secrets.PASSPHRASE }}
   BRANCH_TYPE: ${{ github.event.client_payload.type || github.event.inputs.branch_type }}
   NEW_BRANCH: ${{ github.event.client_payload.branch || github.event.inputs.new_branch }}
-  PACKAGE_NAME: ${{ github.event.client_payload.package_name || github.event.inputs.package_name }}
 
-# Define the jobs to be run
 # Define the jobs to be run
 jobs:
   build:
-    name: Build Package
-    # Only run this job for repository_dispatch or workflow_dispatch events
-    if: github.event_name == 'repository_dispatch' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     container:
       image: talesam/community-build:1.1
       options: --privileged
     steps:
-      - name: Set build name
-        run: |
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "GITHUB_WORKFLOW_NAME=Build ${{ github.event.client_payload.package_name }}" >> $GITHUB_ENV
-          else
-            echo "GITHUB_WORKFLOW_NAME=Build ${{ github.event.inputs.package_name }}" >> $GITHUB_ENV
-          fi
-
-      - name: Display Package Name
-        run: echo "Building package: ${{ env.PACKAGE_NAME }}"
-  
       # Check out the repository
       - uses: actions/checkout@v4
         with:
@@ -273,7 +253,6 @@ jobs:
             find -iname "*$i" -exec gh release upload ${release} --repo ${repo} --clobber {} \;
           done
 
-          
       # Push the package to the repository
       - name: Push to Repo
         shell: bash
