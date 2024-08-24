@@ -302,15 +302,23 @@ jobs:
             branch="TESTING"
           fi
           
+          # Function to send Telegram message
+          send_telegram_message() {
+            message="$1"
+            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TOKEN_BOT }}/sendMessage" \
+              -d chat_id="${{ secrets.CHAT_ID }}" \
+              -d text="$message"
+          }
+          
           # Upload the package files
           for i in *.zst; do
             pkgname=$(basename $i)
             echo "📦 Pacote $pkgname sendo enviado para o repositório 🚀 $branch 🎯"
             rsync -vapz -e "ssh -p ${{ secrets.PKGBUILD_PORT }}" $i ${{ secrets.PKGBUILD_USER }}@$ip:${{ secrets.PKGBUILD_DIR }}/${branch,,}/x86_64/
             if [ $? -eq 0 ]; then
-              curl -X POST -H 'Content-Type: application/json' -d "{\"chat_id\": \"${{ secrets.CHAT_ID }}\", \"text\": \"✅ Pacote $pkgname enviado com sucesso para o repositório $branch\"}" ${{ secrets.TOKEN_BOT }}
+              send_telegram_message "✅ Pacote $pkgname enviado com sucesso para o repositório $branch"
             else
-              curl -X POST -H 'Content-Type: application/json' -d "{\"chat_id\": \"${{ secrets.CHAT_ID }}\", \"text\": \"❌ Falha ao enviar o pacote $pkgname para o repositório $branch\"}" ${{ secrets.TOKEN_BOT }}
+              send_telegram_message "❌ Falha ao enviar o pacote $pkgname para o repositório $branch"
             fi
           done
           for i in *.sig *.md5; do
@@ -323,6 +331,14 @@ jobs:
         if: success()  # Runs only if the previous steps were successful
         shell: bash
         run: |
+          # Function to send Telegram message
+          send_telegram_message() {
+            message="$1"
+            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TOKEN_BOT }}/sendMessage" \
+              -d chat_id="${{ secrets.CHAT_ID }}" \
+              -d text="$message"
+          }
+          
           # Determine the database name based on the branch type
           if [ "$BRANCH_TYPE" == "testing" ]; then
             branch="TESTING"
@@ -339,8 +355,8 @@ jobs:
           echo "Database name: $db_name"
           
           echo "🔄 Sincronizando o banco de dados do repositório $branch..."
-          curl -X POST -H 'Content-Type: application/json' -d "{\"chat_id\": \"${{ secrets.CHAT_ID }}\", \"text\": \"🔄 Iniciando sincronização do banco de dados do repositório $branch...\"}" ${{ secrets.TOKEN_BOT }}
-
+          send_telegram_message "🔄 Iniciando sincronização do banco de dados do repositório $branch..."
+          
           ssh -v ${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }} -p ${{ secrets.PKGBUILD_PORT }} << EOF
             set -x
             cd ${{ secrets.PKGBUILD_DIR }}/${branch,,}/x86_64
@@ -352,10 +368,10 @@ jobs:
           
           if [ $? -eq 0 ]; then
             echo "✅ Sincronização do banco de dados concluída com sucesso!"
-            curl -X POST -H 'Content-Type: application/json' -d "{\"chat_id\": \"${{ secrets.CHAT_ID }}\", \"text\": \"✅ Sincronização do banco de dados do repositório $branch concluída com sucesso!\"}" ${{ secrets.TOKEN_BOT }}
+            send_telegram_message "✅ Sincronização do banco de dados do repositório $branch concluída com sucesso!"
           else
             echo "❌ Falha na sincronização do banco de dados."
-            curl -X POST -H 'Content-Type: application/json' -d "{\"chat_id\": \"${{ secrets.CHAT_ID }}\", \"text\": \"❌ Falha na sincronização do banco de dados do repositório $branch.\"}" ${{ secrets.TOKEN_BOT }}
+            send_telegram_message "❌ Falha na sincronização do banco de dados do repositório $branch."
           fi
 
   
@@ -376,4 +392,6 @@ jobs:
       - name: Telegram Alert Fail
         if: ${{ failure() }}
         run: |
-          curl -X POST -H 'Content-Type: application/json' -d '{"chat_id": "${{ secrets.CHAT_ID }}", "text": "🚨 FALHA ao criar Pacote Community: ${{ github.event.action }} a partir do branch ${{ github.ref_name }}, link do erro: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} 🖥", "disable_notification": false}' ${{ secrets.TOKEN_BOT }}
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TOKEN_BOT }}/sendMessage" \
+            -d chat_id="${{ secrets.CHAT_ID }}" \
+            -d text="🚨 FALHA ao criar Pacote Community: ${{ github.event.action }} a partir do branch ${{ github.ref_name }}, link do erro: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} 🖥"
