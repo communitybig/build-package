@@ -300,15 +300,20 @@ jobs:
         if: success()  # Runs only if the previous steps were successful
         shell: bash
         run: |
-          # Determine the database name based on the branch
-          if [ "$branch" == "community-testing" ]; then
+          # Determine the database name based on the branch type
+          if [ "$BRANCH_TYPE" == "testing" ]; then
+            branch="testing"
             db_name="community-testing"
-          elif [ "$branch" == "community-stable" ]; then
-            db_name="community-stable"
+          elif [ "$BRANCH_TYPE" == "stable" ]; then
+            branch="community-stable"
+            db_name="stable"
           else
-            echo "Error: Unknown branch: $branch"
+            echo "Error: Unknown branch type: $BRANCH_TYPE"
             exit 1
           fi
+
+          echo "Branch: $branch"
+          echo "Database name: $db_name"
 
           ssh ${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }} -p ${{ secrets.PKGBUILD_PORT }} "
             cd ${{ secrets.PKGBUILD_DIR }}/$branch/x86_64 &&
