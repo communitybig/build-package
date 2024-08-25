@@ -307,18 +307,24 @@ jobs:
             message="$1"
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TOKEN_BOT }}/sendMessage" \
               -d chat_id="${{ secrets.CHAT_ID }}" \
-              -d text="$message"
+              -d text="$message"\
+              -d parse_mode="MarkdownV2"
           }
           
           # Upload the package files
           for i in *.zst; do
             pkgname=$(basename $i)
-            send_telegram_message "📦 Pacote $pkgname sendo enviado para o repositório 🚀 $branch 🎯"
+            
+            pkgname_escaped=$(echo "$pkgname" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
+            branch_escaped=$(echo "$branch" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
+            
+            echo "📦 Pacote $pkgname sendo enviado para o repositório 🚀 $branch 🎯"
+            send_telegram_message "📦 **Pacote** \`$pkgname_escaped\` **sendo enviado para o repositório** 🚀 \`$branch_escaped\`🎯"
             rsync -vapz -e "ssh -p ${{ secrets.PKGBUILD_PORT }}" $i ${{ secrets.PKGBUILD_USER }}@$ip:${{ secrets.PKGBUILD_DIR }}/${branch,,}/x86_64/
             if [ $? -eq 0 ]; then
-              send_telegram_message "✅ Pacote $pkgname enviado com sucesso para o repositório $branch"
+              send_telegram_message "✅ **Pacote** \`$pkgname_escaped\` **enviado com sucesso para o repositório** \`$branch_escaped\`"
             else
-              send_telegram_message "❌ Falha ao enviar o pacote $pkgname para o repositório $branch"
+              send_telegram_message "❌ **Falha ao enviar o pacote** \`$pkgname_escaped\` **para o repositório** \`$branch_escaped\`"
             fi
           done
           for i in *.sig *.md5; do
@@ -336,7 +342,8 @@ jobs:
             message="$1"
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TOKEN_BOT }}/sendMessage" \
               -d chat_id="${{ secrets.CHAT_ID }}" \
-              -d text="$message"
+              -d text="$message" \
+              -d parse_mode="MarkdownV2"
           }
           
           # Determine the database name based on the branch type
@@ -354,8 +361,11 @@ jobs:
           echo "Branch: $branch"
           echo "Database name: $db_name"
           
+          branch_escaped=$(echo "$branch" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
+          db_name_escaped=$(echo "$db_name" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
+          
           echo "🔄 Sincronizando o banco de dados do repositório $branch..."
-          send_telegram_message "🔄 Iniciando sincronização do banco de dados do repositório $branch..."
+          send_telegram_message "🔄 **Iniciando sincronização do banco de dados do repositório** \`$branch_escaped\`"
           
           ssh -v ${{ secrets.PKGBUILD_USER }}@${{ secrets.PKGBUILD_HOST }} -p ${{ secrets.PKGBUILD_PORT }} << EOF
             set -x
@@ -368,10 +378,10 @@ jobs:
           
           if [ $? -eq 0 ]; then
             echo "✅ Sincronização do banco de dados concluída com sucesso!"
-            send_telegram_message "✅ Sincronização do banco de dados do repositório $branch concluída com sucesso!"
+            send_telegram_message "✅ **Sincronização do banco de dados do repositório** \`$branch_escaped\` **concluída com sucesso\!**"
           else
             echo "❌ Falha na sincronização do banco de dados."
-            send_telegram_message "❌ Falha na sincronização do banco de dados do repositório $branch."
+            send_telegram_message "❌ **Falha na sincronização do banco de dados do repositório** \`$branch_escaped\`\."
           fi
 
   
