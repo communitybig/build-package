@@ -160,6 +160,14 @@ jobs:
           sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
   
   
+      # Preparação do sistema para build AUR (se necessário)
+      - name: System Preparation for AUR Build
+        shell: bash
+        run: |
+          # Atualizar a lista de pacotes
+          pacman -Syy --noconfirm
+  
+  
       # Clone repository or AUR package
       - name: Clone Source
         run: |
@@ -173,7 +181,7 @@ jobs:
             cd $(basename ${{ github.event.client_payload.url }})
             git checkout ${{ env.NEW_BRANCH }}
           fi
-  
+        
   
       # Build the package
       - name: Build
@@ -183,6 +191,9 @@ jobs:
             # Build AUR package
             echo "Building AUR package: ${{ env.AUR_PACKAGE }}"
             cd ${{ env.AUR_PACKAGE }}
+            # Instalar dependências do AUR package
+            sudo -u builduser yay -S --noconfirm --needed $(source PKGBUILD && echo ${depends[@]} ${makedepends[@]})
+            # Build do pacote
             sudo -u builduser makepkg -s --noconfirm
           else
             # Build for non-AUR packages
