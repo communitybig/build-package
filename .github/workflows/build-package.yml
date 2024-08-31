@@ -43,7 +43,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: talesam/community-build:1.1
+      image: talesam/community-build:1.2
       options: --privileged
     steps:
       # Check out the repository
@@ -161,17 +161,10 @@ jobs:
   
   
       # Clone repository or AUR package
-      - name: Clone Source and Prepare Build Environment
-        shell: bash
+      - name: Clone Source
         run: |
-          # Create build user
-          useradd builduser -m
-          passwd -d builduser
-          printf 'builduser ALL=(ALL) ALL\n' | tee -a /etc/sudoers
-          
           if [ "${{ env.BRANCH_TYPE }}" = "aur" ]; then
             echo "Cloning AUR package: ${{ env.AUR_PACKAGE }}"
-            cd /home/builduser
             sudo -u builduser git clone https://aur.archlinux.org/${{ env.AUR_PACKAGE }}.git
             cd ${{ env.AUR_PACKAGE }}
           else
@@ -189,8 +182,8 @@ jobs:
           if [ "${{ env.BRANCH_TYPE }}" = "aur" ]; then
             # Build AUR package
             echo "Building AUR package: ${{ env.AUR_PACKAGE }}"
-            cd /home/builduser/${{ env.AUR_PACKAGE }}
-            sudo -u builduser bash -c "makepkg -s --noconfirm"
+            cd ${{ env.AUR_PACKAGE }}
+            sudo -u builduser makepkg -s --noconfirm
           else
             # Build for non-AUR packages
             echo "Building non-AUR package"
@@ -305,7 +298,11 @@ jobs:
           ip=${{ secrets.PKGBUILD_HOST }}
           
           # Find the PKGBUILD directory
-          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          if [ "${{ env.BRANCH_TYPE }}" = "aur" ]; then
+            gitfolder=${{ env.AUR_PACKAGE }}
+          else
+            gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          fi
           cd $gitfolder
           ls -lh
           
