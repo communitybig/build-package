@@ -158,22 +158,18 @@ jobs:
           # Modify manjaro-chrootbuild
           sed -i 's|https://repo.manjaro.org/repo|https://nnenix.mm.fcix.net/manjaro|' /usr/lib/manjaro-chrootbuild/util.sh
           sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
-
   
-      # Download the source code
-      - name: Download Source
-        shell: bash
-        run: |
-          git clone $url.git
-
   
       # Clone repository or AUR package
-      - name: Clone repository or AUR package
+      - name: Clone Source
+        shell: bash
         run: |
           if [ "${{ env.BRANCH_TYPE }}" = "aur" ]; then
+            echo "Cloning AUR package: ${{ env.AUR_PACKAGE }}"
             git clone https://aur.archlinux.org/${{ env.AUR_PACKAGE }}.git
             cd ${{ env.AUR_PACKAGE }}
           else
+            echo "Cloning GitHub repository: ${{ github.event.client_payload.url }}"
             git clone ${{ github.event.client_payload.url }}.git
             cd $(basename ${{ github.event.client_payload.url }})
             git checkout ${{ env.NEW_BRANCH }}
@@ -191,9 +187,12 @@ jobs:
           
           if [ "${{ env.BRANCH_TYPE }}" = "aur" ]; then
             # Build AUR package
+            echo "Building AUR package: ${{ env.AUR_PACKAGE }}"
             cd ${{ env.AUR_PACKAGE }}
             sudo -u builduser bash -c "makepkg -s --noconfirm"
           else
+            # Build for non-AUR packages
+            echo "Building non-AUR package"
             # Find and enter the directory containing PKGBUILD
             gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
             cd $gitfolder
