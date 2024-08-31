@@ -167,6 +167,19 @@ jobs:
           git clone $url.git
 
   
+      # Clone repository or AUR package
+      - name: Clone repository or AUR package
+        run: |
+          if [ "${{ env.BRANCH_TYPE }}" = "aur" ]; then
+            git clone https://aur.archlinux.org/${{ env.AUR_PACKAGE }}.git
+            cd ${{ env.AUR_PACKAGE }}
+          else
+            git clone ${{ github.event.client_payload.url }}.git
+            cd $(basename ${{ github.event.client_payload.url }})
+            git checkout ${{ env.NEW_BRANCH }}
+          fi
+  
+  
       # Build the package
       - name: Build
         shell: bash
@@ -176,14 +189,10 @@ jobs:
           passwd -d builduser
           printf 'builduser ALL=(ALL) ALL\n' | tee -a /etc/sudoers
           
-          if [ "${{ github.event.client_payload.type }}" == "aur" ]; then
+          if [ "${{ env.BRANCH_TYPE }}" = "aur" ]; then
             # Build AUR package
-            sudo -u builduser bash -c "
-              cd /home/builduser
-              git clone https://aur.archlinux.org/${{ env.AUR_PACKAGE }}.git
-              cd ${{ env.AUR_PACKAGE }}
-              makepkg -s --noconfirm
-            "
+            cd ${{ env.AUR_PACKAGE }}
+            sudo -u builduser bash -c "makepkg -s --noconfirm"
           else
             # Find and enter the directory containing PKGBUILD
             gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
