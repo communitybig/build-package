@@ -35,7 +35,6 @@ env:
   BRANCH_TYPE: ${{ github.event.client_payload.type || github.event.inputs.branch_type }}
   NEW_BRANCH: ${{ github.event.client_payload.branch || github.event.inputs.new_branch }}
   PACKAGE_NAME: ${{ github.event.action }}
-  AUR_PACKAGE: ${{ github.event.client_payload.aur_package }}
 
 
 # Define the jobs to be run
@@ -176,30 +175,20 @@ jobs:
           passwd -d builduser
           printf 'builduser ALL=(ALL) ALL\n' | tee -a /etc/sudoers
           
-          if [ "${{ github.event.client_payload.type }}" == "aur" ]; then
-            # Build AUR package
-            sudo -u builduser bash -c "
-              cd /home/builduser
-              git clone https://aur.archlinux.org/${{ env.AUR_PACKAGE }}.git
-              cd ${{ env.AUR_PACKAGE }}
-              makepkg -s --noconfirm
-            "
-          else
-            # Find and enter the directory containing PKGBUILD
-            gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-            cd $gitfolder
-            
-            # Set architecture
-            pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
-            if [ "$pkgArch" = "any" ]; then
-              sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
-            fi
-            
-            # Build for x86_64
-            if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
-              echo -e "\033[01;31mBuild x86_64\033[0m"
-              sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ env.BRANCH_TYPE }}"
-            fi
+          # Find and enter the directory containing PKGBUILD
+          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          cd $gitfolder
+          
+          # Set architecture
+          pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
+          if [ "$pkgArch" = "any" ]; then
+            sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
+          fi
+          
+          # Build for x86_64
+          if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
+            echo -e "\033[01;31mBuild x86_64\033[0m"
+            sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ env.BRANCH_TYPE }}"
           fi
 
   
