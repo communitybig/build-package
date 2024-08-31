@@ -161,12 +161,18 @@ jobs:
   
   
       # Clone repository or AUR package
-      - name: Clone Source
+      - name: Clone Source and Prepare Build Environment
         shell: bash
         run: |
+          # Create build user
+          useradd builduser -m
+          passwd -d builduser
+          printf 'builduser ALL=(ALL) ALL\n' | tee -a /etc/sudoers
+          
           if [ "${{ env.BRANCH_TYPE }}" = "aur" ]; then
             echo "Cloning AUR package: ${{ env.AUR_PACKAGE }}"
-            git clone https://aur.archlinux.org/${{ env.AUR_PACKAGE }}.git
+            cd /home/builduser
+            sudo -u builduser git clone https://aur.archlinux.org/${{ env.AUR_PACKAGE }}.git
             cd ${{ env.AUR_PACKAGE }}
           else
             echo "Cloning GitHub repository: ${{ github.event.client_payload.url }}"
@@ -180,15 +186,10 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          # Create build user
-          useradd builduser -m
-          passwd -d builduser
-          printf 'builduser ALL=(ALL) ALL\n' | tee -a /etc/sudoers
-          
           if [ "${{ env.BRANCH_TYPE }}" = "aur" ]; then
             # Build AUR package
             echo "Building AUR package: ${{ env.AUR_PACKAGE }}"
-            cd ${{ env.AUR_PACKAGE }}
+            cd /home/builduser/${{ env.AUR_PACKAGE }}
             sudo -u builduser bash -c "makepkg -s --noconfirm"
           else
             # Build for non-AUR packages
