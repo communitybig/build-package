@@ -91,6 +91,12 @@ inputs:
   url:
     description: 'URL do repositório'
     required: false
+  new_branch:
+    description: 'Nome do novo branch'
+    required: false
+  package_name:
+    description: 'Nome do pacote'
+    required: false
 
 # Definição dos passos da ação
 runs:
@@ -108,8 +114,8 @@ runs:
           fakeroot \
           jq \
           libarchive \
-          libcurl \
-          libgpgme \
+          curl \
+          gnupb \
           openssl \
           zip \
           python-pip
