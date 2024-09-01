@@ -1,26 +1,25 @@
 # Name of the workflow
-name: Build Package
+name: Build AUR Package
 
 # Define when the workflow will run
 on:
   # Triggered by repository_dispatch event
-  repository_dispatch:
-    types: ['*']
+  # repository_dispatch:
+  #   types: ['*']
 
   # Allows manual triggering of the workflow
   workflow_dispatch:
     inputs:
+      package_name:
+        description: 'Nome do pacote AUR'
+        required: true
       branch_type:
-        description: 'Branch type (testing or stable)'
+        description: 'Tipo de branch (testing ou stable)'
         required: true
         type: choice
         options:
           - testing
           - stable
-      new_branch:
-        description: 'Nome do novo branch'
-        required: true
-        type: string
       debug_enabled:
         type: boolean
         description: 'With TMATE'
@@ -32,9 +31,8 @@ on:
 env:
   gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
   gpg_passphrase: ${{ secrets.PASSPHRASE }}
-  BRANCH_TYPE: ${{ github.event.client_payload.type || github.event.inputs.branch_type }}
-  NEW_BRANCH: ${{ github.event.client_payload.branch || github.event.inputs.new_branch }}
-  PACKAGE_NAME: ${{ github.event.action }}
+  BRANCH_TYPE: ${{ github.event.inputs.branch_type }}
+  AUR_PACKAGE: ${{ github.event.inputs.package_name }}
 
 
 # Define the jobs to be run
@@ -46,9 +44,8 @@ jobs:
       options: --privileged
     steps:
       # Check out the repository
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Checkout
+        uses: actions/checkout@v4
   
   
       # Initialize SSH agent and add private key
@@ -61,25 +58,12 @@ jobs:
           echo "SSH_AUTH_SOCK=/tmp/ssh_agent.sock" >> $GITHUB_ENV
   
   
-      # Add the repository directory as safe
-      - name: Add safe directory
-        run: git config --global --add safe.directory /__w/build-package/build-package
-  
-  
-      - name: Fetch all branches
-        run: |
-          git fetch --all
-          git fetch origin '+refs/heads/*:refs/remotes/origin/*'
-  
-  
-      # Checkout to specified branch or create if not exists
-      - name: Checkout to specified branch or create if not exists
-        run: |
-          if git ls-remote --exit-code --heads origin ${{ env.NEW_BRANCH }}; then
-            git checkout ${{ env.NEW_BRANCH }}
-          else
-            git checkout -b ${{ env.NEW_BRANCH }}
-          fi
+      - name: Build AUR Package
+        uses: ./.github/actions/community-package
+        with:
+          build_env: ${{ env.BRANCH_TYPE }}
+          package_type: 'aur'
+          package_name: ${{ env.AUR_PACKAGE }}
   
   
       # Set environment variables
@@ -219,7 +203,11 @@ jobs:
           ip=${{ secrets.PKGBUILD_HOST }}
           
           # Find the PKGBUILD directory
-          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          if [ "${{ env.BRANCH_TYPE }}" = "aur" ]; then
+            gitfolder=${{ env.AUR_PACKAGE }}
+          else
+            gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          fi
           cd $gitfolder
           ls -lh
           
