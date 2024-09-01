@@ -118,8 +118,12 @@ runs:
           gnupg \
           openssl \
           zip \
-          python-pip
-        sudo pip3 install meson ninja
+          meson \
+          ninja
+          
+        # Verifica as versões instaladas
+        meson --version
+        ninja --version
   
     - name: Configure System and Repositories
       shell: bash
