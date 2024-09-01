@@ -144,3 +144,4 @@ jobs:
           push_to_repo: ${{ github.event.inputs.push_to_repo || 'true' }}
           update_db: ${{ github.event.inputs.update_db || 'true' }}
           extra_command: ${{ github.event.inputs.extra_command }}
+          repo: ${{ github.repository }}

@@ -125,22 +125,23 @@ runs:
         meson --version
         ninja --version
   
+  
     - name: Configure System and Repositories
       shell: bash
       run: |
         # Set up pacman mirror
         echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
-
+        
         # Remove existing BigLinux repositories
         sudo sed -i '/biglinux/,$d' /etc/pacman.conf
-
+        
         # Add appropriate repositories based on build environment
         if [ "${{ inputs.build_env }}" == "testing" ]; then
           echo '
           [community-testing]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/testing/$arch
-
+          
           [biglinux-testing]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/testing/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
@@ -149,7 +150,7 @@ runs:
           [community-stable]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/stable/$arch
-
+          
           [biglinux-stable]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
@@ -157,15 +158,16 @@ runs:
           echo "Invalid build environment specified"
           exit 1
         fi
-
+        
         # Configure makepkg
         sudo sed -i '/PACKAGER=/s/.*/PACKAGER="Big Community Package Build <talesam@gmail.com>"/' /etc/makepkg.conf
         sudo sed -i '/MAKEFLAGS=/s/.*/MAKEFLAGS="-j'$(nproc)'"/' /etc/makepkg.conf
-
+        
         # Modify manjaro-chrootbuild
         sudo sed -i 's|https://repo.manjaro.org/repo|https://nnenix.mm.fcix.net/manjaro|' /usr/lib/manjaro-chrootbuild/util.sh
         sudo sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
 
+  
     # # Download the source code
     - name: Download Source
       shell: bash
@@ -181,7 +183,8 @@ runs:
         else
           echo "No URL provided, assuming we're already in the correct repository"
         fi
-        
+  
+  
     # Constrói o pacote
     - name: Build package
       shell: bash
@@ -190,12 +193,12 @@ runs:
         if [ -d "source_repo" ]; then
           cd source_repo
         fi
-
+        
         # Debug: Mostrar diretório atual e conteúdo
         echo "Current directory: $(pwd)"
         echo "Directory contents:"
         ls -la
-      
+        
         # Create build user
         useradd builduser -m
         passwd -d builduser
@@ -216,13 +219,14 @@ runs:
           echo -e "\033[01;31mBuild x86_64\033[0m"
           sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ inputs.branch_type }}"
         fi
-
+        
         # Executa comando extra, se fornecido
         if [ -n "${{ inputs.extra_command }}" ]; then
           echo "Executando comando extra: ${{ inputs.extra_command }}"
           ${{ inputs.extra_command }}
         fi
 
+  
     # Assina o pacote
     - name: Sign Package
       shell: bash
@@ -248,6 +252,7 @@ runs:
         echo "Arquivos de assinatura gerados:"
         ls -l *.sig
 
+  
     # Gera checksums para os pacotes
     - name: Generate checksums
       shell: bash
@@ -277,6 +282,7 @@ runs:
         echo "Arquivos MD5 gerados:"
         ls -l *.md5
   
+  
     # Publish the package on GitHub
     - name: Publish Package on GitHub
       if: inputs.publish_github == 'true'
@@ -298,12 +304,17 @@ runs:
         fi
         
         # Set up GitHub authentication and determine the repository
-        if [ -n "$(grep -i communitybig <<< ${{ inputs.source }})" ];then
-          echo ${{ inputs.github_token }} | gh auth login --with-token
-          repo=$(sed 's|https://github.com/||' <<< ${{ inputs.source }})
+        if [ -n "${{ inputs.url }}" ]; then
+          echo "${{ inputs.github_token }}" | gh auth login --with-token
+          repo=$(echo "${{ inputs.url }}" | sed 's|https://github.com/||')
         else
-          echo ${{ inputs.github_token }} | gh auth login --with-token
-          repo=${{ inputs.repo }}
+          echo "${{ inputs.github_token }}" | gh auth login --with-token
+          repo="${{ inputs.repo }}"
+        fi
+        
+        # Fallback to github.repository if repo is still empty
+        if [ -z "$repo" ]; then
+          repo="${{ github.repository }}"
         fi
         
         # Create and upload the release
@@ -312,13 +323,21 @@ runs:
         
         echo "release=$release"
         echo "repo=$repo"
-        echo "url=${{ inputs.source }}"
+        echo "url=${{ inputs.url }}"
         
-        gh release create ${release} --title ${release} --repo ${repo} --notes "automated release from ${{ inputs.source }}" || echo "release already exists"
-        for i in .zst .sig .tar .md5; do
-          find -iname "*$i" -exec gh release upload ${release} --repo ${repo} --clobber {} \;
-        done
-        
+        if [ -n "$repo" ] && [ -n "$release" ]; then
+          echo "Using repository: $repo"
+          echo "Creating release: $release"
+          gh release create ${release} --title ${release} --repo ${repo} --notes "automated release from ${{ inputs.url }}" || echo "release already exists"
+          for i in .zst .sig .tar .md5; do
+            find -iname "*$i" -exec gh release upload ${release} --repo ${repo} --clobber {} \;
+          done
+        else
+          echo "Error: repo or release is empty"
+          exit 1
+        fi
+  
+  
     # Push the package to the repository
     - name: Push to Repo
       if: inputs.push_to_repo == 'true'
@@ -431,6 +450,7 @@ runs:
           send_telegram_message "❌ **Falha na sincronização do banco de dados do repositório** \`$branch_escaped\`\."
         fi
 
+  
     # Keeps only the most recent package
     - name: Clean Old Packages
       if: inputs.update_db == 'true' && success()
