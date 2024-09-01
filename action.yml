@@ -115,7 +115,7 @@ runs:
           jq \
           libarchive \
           curl \
-          gnupb \
+          gnupg \
           openssl \
           zip \
           python-pip
