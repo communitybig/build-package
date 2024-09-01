@@ -166,10 +166,36 @@ runs:
         sudo sed -i 's|https://repo.manjaro.org/repo|https://nnenix.mm.fcix.net/manjaro|' /usr/lib/manjaro-chrootbuild/util.sh
         sudo sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
 
+    # # Download the source code
+    - name: Download Source
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.url }}" ]; then
+          echo "Cloning repository from ${{ inputs.url }}"
+          git clone ${{ inputs.url }}.git source_repo
+          cd source_repo
+          if [ -n "${{ inputs.git_branch }}" ]; then
+            echo "Checking out branch ${{ inputs.git_branch }}"
+            git checkout ${{ inputs.git_branch }}
+          fi
+        else
+          echo "No URL provided, assuming we're already in the correct repository"
+        fi
+        
     # Constrói o pacote
     - name: Build package
       shell: bash
       run: |
+        # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
+        if [ -d "source_repo" ]; then
+          cd source_repo
+        fi
+
+        # Debug: Mostrar diretório atual e conteúdo
+        echo "Current directory: $(pwd)"
+        echo "Directory contents:"
+        ls -la
+      
         # Create build user
         useradd builduser -m
         passwd -d builduser
