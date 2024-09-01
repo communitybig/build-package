@@ -42,7 +42,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: talesam/community-build:1.1
+      image: talesam/community-build:1.2
       options: --privileged
     steps:
       # Check out the repository
@@ -124,73 +124,101 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
         with:
           install-dependencies: false
-
   
-      # Make changes to the system configuration
-      - name: Changes in System
+  
+      # Configure repositories based on build environment
+      - name: Configure System and Repositories
         shell: bash
         run: |
-          # Set up pacman mirror and repositories
-          echo 'Server = https://nnenix.mm.fcix.net/manjaro/stable/$repo/$arch' | tee /etc/pacman.d/mirrorlist
-          sed -i '/biglinux/,$d' /etc/pacman.conf
-          echo '
-          [community-testing]
-          SigLevel = PackageRequired
-          Server = https://repo.communitybig.org/testing/$arch
+          # Set up pacman mirror
+          echo 'Server = https://nnenix.mm.fcix.net/manjaro/stable/$repo/$arch' | sudo tee /etc/pacman.d/mirrorlist
 
-          [community-stable]
-          SigLevel = PackageRequired
-          Server = https://repo.communitybig.org/stable/$arch
+          # Remove existing BigLinux configurations
+          sudo sed -i '/biglinux/,$d' /etc/pacman.conf
 
-          [biglinux-testing]
-          SigLevel = PackageRequired
-          Server = https://repo.biglinux.com.br/testing/$arch
+          # Configure repositories based on build environment
+          if [ "${{ inputs.build_env }}" == "testing" ]; then
+            echo '
+            [community-testing]
+            SigLevel = PackageRequired
+            Server = https://repo.communitybig.org/testing/$arch
 
-          [biglinux-stable]
-          SigLevel = PackageRequired
-          Server = https://repo.biglinux.com.br/stable/$arch' | tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+            [biglinux-testing]
+            SigLevel = PackageRequired
+            Server = https://repo.biglinux.com.br/testing/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+          elif [ "${{ inputs.build_env }}" == "stable" ]; then
+            echo '
+            [community-stable]
+            SigLevel = PackageRequired
+            Server = https://repo.communitybig.org/stable/$arch
+
+            [biglinux-stable]
+            SigLevel = PackageRequired
+            Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+          else
+            echo "Invalid build environment specified"
+            exit 1
+          fi
 
           # Configure makepkg
-          sed -i '/PACKAGER=/s/.*/\PACKAGER="Big Community Package Build <bigbruno@gmail.com>\"/' /etc/makepkg.conf
-          sed -i '/MAKEFLAGS=/s/.*/MAKEFLAGS="-j'$(nproc)'"/' /etc/makepkg.conf
+          sudo sed -i '/PACKAGER=/s/.*/PACKAGER="Big Community Package Build <bigbruno@gmail.com>"/' /etc/makepkg.conf
+          sudo sed -i '/MAKEFLAGS=/s/.*/MAKEFLAGS="-j'$(nproc)'"/' /etc/makepkg.conf
 
           # Modify manjaro-chrootbuild
-          sed -i 's|https://repo.manjaro.org/repo|https://nnenix.mm.fcix.net/manjaro|' /usr/lib/manjaro-chrootbuild/util.sh
-          sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
+          sudo sed -i 's|https://repo.manjaro.org/repo|https://nnenix.mm.fcix.net/manjaro|' /usr/lib/manjaro-chrootbuild/util.sh
+          sudo sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
 
-  
-      # Download the source code
-      - name: Download Source
+          # Update package lists
+          sudo pacman -Syy
+
+          # Install additional dependencies
+          sudo pacman -S --needed --noconfirm base-devel cmake fakeroot jq libarchive openssl zip python-pip
+          sudo pip3 install meson ninja
+
+    
+        # Clone repository
+        - name: Clone and prepare source
+          shell: bash
+          run: |
+            echo "Cloning GitHub repository: ${{ github.event.client_payload.url }}"
+            git clone ${{ github.event.client_payload.url }}.git
+            cd $(basename ${{ github.event.client_payload.url }})
+            git checkout ${{ inputs.git_branch }}
+    
+    
+#       # Download the source code
+#       - name: Download Source
+#         shell: bash
+#         run: |
+#           git clone $url.git
+#     
+    
+      # Baild Package
+      - name: Build Package
         shell: bash
         run: |
-          git clone $url.git
-
+          if [ "${{ inputs.build_env }}" = "aur" ]; then
+            # Build AUR package
+            cd ${{ inputs.AUR_PACKAGE }}
+            makepkg -s --noconfirm --needed
+          else
+            # Build non-AUR package
+            gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+            cd $gitfolder
+            
+            # Set architecture if needed
+            pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
+            if [ "$pkgArch" = "any" ]; then
+              sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
+            fi
+            
+            # Build for x86_64
+            if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
+              echo -e "\033[01;31mBuild x86_64\033[0m"
+              sudo chrootbuild -H -p . -b ${{ inputs.build_env }}
+            fi
+          fi
   
-      # Build the package
-      - name: Build
-        shell: bash
-        run: |
-          # Create build user
-          useradd builduser -m
-          passwd -d builduser
-          printf 'builduser ALL=(ALL) ALL\n' | tee -a /etc/sudoers
-          
-          # Find and enter the directory containing PKGBUILD
-          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-          cd $gitfolder
-          
-          # Set architecture
-          pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
-          if [ "$pkgArch" = "any" ]; then
-            sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
-          fi
-          
-          # Build for x86_64
-          if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
-            echo -e "\033[01;31mBuild x86_64\033[0m"
-            sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ env.BRANCH_TYPE }}"
-          fi
-
   
       # Rename the package if necessary
       - name: Rename Package
