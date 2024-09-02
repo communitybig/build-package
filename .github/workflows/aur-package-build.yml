@@ -38,6 +38,8 @@ jobs:
       uses: ./
       with:
         build_env: aur
+        build_env_alt: ${{ 'aur' }}
+        build_env_env: ${{ env.BRANCH_TYPE }}
         branch_type: aur
         package_name: ${{ env.PACKAGE_NAME }}
         github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -56,6 +58,7 @@ jobs:
         aur_package_dir: './aur_package'
       env:
         DEBUG_BUILD_ENV: aur
+        DEBUG_INPUTS: ${{ toJson(inputs) }}
 
     - name: Cleanup
       if: always()

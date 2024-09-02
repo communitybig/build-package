@@ -106,6 +106,16 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Debug Inputs
+      shell: bash
+      run: |
+        echo "DEBUG: All inputs"
+        echo "${{ toJson(inputs) }}"
+        echo "DEBUG: build_env from input: ${{ inputs.build_env }}"
+        echo "DEBUG: build_env from env: $DEBUG_BUILD_ENV"
+        echo "DEBUG: All env variables"
+        env | sort
+  
     # Configuração do ambiente de build
     - name: Setup build environment
       shell: bash
@@ -130,13 +140,15 @@ runs:
         ninja --version
   
   
-    - name: Configure System and Repositories
+   - name: Configure System and Repositories
       shell: bash
       run: |
         echo "Build environment: ${{ inputs.build_env }}"
         echo "Build environment from env: $DEBUG_BUILD_ENV"
         echo "All inputs:"
         echo "${{ toJson(inputs) }}"
+        echo "DEBUG: BRANCH_TYPE: $BRANCH_TYPE"
+        
         # Set up pacman mirror
         echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
         
@@ -144,7 +156,7 @@ runs:
         sudo sed -i '/biglinux/,$d' /etc/pacman.conf
         
         # Add appropriate repositories based on build environment
-        if [ "${{ inputs.build_env }}" == "testing" ]; then
+        if [ "${{ inputs.build_env }}" == "testing" ] || [ "$BRANCH_TYPE" == "testing" ]; then
           echo '
           [community-testing]
           SigLevel = PackageRequired
@@ -153,7 +165,7 @@ runs:
           [biglinux-testing]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/testing/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
-        elif [ "${{ inputs.build_env }}" == "stable" ]; then
+        elif [ "${{ inputs.build_env }}" == "stable" ] || [ "$BRANCH_TYPE" == "stable" ]; then
           echo '
           [community-stable]
           SigLevel = PackageRequired
@@ -162,7 +174,7 @@ runs:
           [biglinux-stable]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
-        elif [ "${{ inputs.build_env }}" == "aur" ]; then
+        elif [ "${{ inputs.build_env }}" == "aur" ] || [ "$BRANCH_TYPE" == "aur" ]; then
           echo "Configurando para pacote AUR"
           # Configurações específicas para AUR
           sudo sed -i 's/^#MAKEFLAGS="-j2"/MAKEFLAGS="-j$(nproc)"/' /etc/makepkg.conf
@@ -179,6 +191,7 @@ runs:
           sudo pacman -S --needed base-devel git --noconfirm
         else
           echo "Invalid build environment specified: ${{ inputs.build_env }}"
+          echo "BRANCH_TYPE: $BRANCH_TYPE"
           exit 1
         fi
         
