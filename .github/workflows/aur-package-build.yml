@@ -8,7 +8,7 @@ on:
 env:
   PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
   AUR_URL: ${{ github.event.client_payload.aur_url }}
-  BRANCH_TYPE: ${{ github.event.client_payload.branch_type }}
+  BRANCH_TYPE: aur
 
 jobs:
   build:
@@ -39,9 +39,8 @@ jobs:
       uses: ./
       with:
         build_env: aur
-        branch_type: ${{ env.BRANCH_TYPE }}
+        branch_type: aur
         package_name: ${{ env.PACKAGE_NAME }}
-        aur_url: ${{ env.AUR_URL }}
         github_token: ${{ secrets.GITHUB_TOKEN }}
         gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
         gpg_passphrase: ${{ secrets.PASSPHRASE }}
@@ -56,9 +55,6 @@ jobs:
         push_to_repo: 'true'
         update_db: 'true'
         aur_package_dir: './aur_package'
-      env:
-        BRANCH_TYPE: ${{ env.BRANCH_TYPE }}
-
 
     - name: Cleanup
       if: always()
