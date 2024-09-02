@@ -26,6 +26,9 @@ inputs:
   gpg-passphrase:
     description: 'gpg passphrase'
     required: true
+  git_branch:
+    description: 'extra repository to build package'
+    required: false
   extracommand:
     description: 'extra command to build package'
     required: false
@@ -43,15 +46,9 @@ inputs:
     description: 'development repository'
     required: false
   build_env:
-    description: 'Build environment (testing, stable, or aur)'
+    description: 'Build environment (testing or stable)'
     required: true
     default: 'testing'
-  AUR_PACKAGE:
-    description: 'Name of the AUR package to build'
-    required: false
-  git_branch:
-    description: 'Git branch to use for non-AUR builds'
-    required: false
 
 # Define the steps of the action
 runs:
@@ -63,169 +60,119 @@ runs:
       run: |
         echo "Community Build Image Version:"
         cat /etc/community-build-version || echo "Version: 1.2"
-  
-    - name: Configure repositories and prepare build environment
+
+    # Install additional build dependencies if needed
+    - name: install additional build-dependencies
       shell: bash
       run: |
-        # Backup original pacman.conf
-        sudo cp /etc/pacman.conf /etc/pacman.conf.backup
+        sudo pacman -Syu --noconfirm
+        sudo pacman -S --needed --noconfirm \
+          base-devel \
+          cmake \
+          fakeroot \
+          jq \
+          libarchive \
+          libcurl \
+          libgpgme \
+          openssl \
+          zip \
+          python-pip
+        sudo pip3 install meson ninja
   
-#     # Configure repositories based on build environment
-#     - name: Configure System and Repositories
-#       shell: bash
-#       run: |
-#         # Set up pacman mirror
-#         echo 'Server = https://nnenix.mm.fcix.net/manjaro/stable/$repo/$arch' | sudo tee /etc/pacman.d/mirrorlist
-# 
-#         # Remove existing BigLinux configurations
-#         sudo sed -i '/biglinux/,$d' /etc/pacman.conf
-# 
-#         # Configure repositories based on build environment
-#         if [ "${{ inputs.build_env }}" == "testing" ]; then
-#           echo '
-#           [community-testing]
-#           SigLevel = PackageRequired
-#           Server = https://repo.communitybig.org/testing/$arch
-# 
-#           [biglinux-testing]
-#           SigLevel = PackageRequired
-#           Server = https://repo.biglinux.com.br/testing/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
-#         elif [ "${{ inputs.build_env }}" == "stable" ]; then
-#           echo '
-#           [community-stable]
-#           SigLevel = PackageRequired
-#           Server = https://repo.communitybig.org/stable/$arch
-# 
-#           [biglinux-stable]
-#           SigLevel = PackageRequired
-#           Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
-#         else
-#           echo "Invalid build environment specified"
-#           exit 1
-#         fi
-# 
-#         # Configure makepkg
-#         sudo sed -i '/PACKAGER=/s/.*/PACKAGER="Big Community Package Build <bigbruno@gmail.com>"/' /etc/makepkg.conf
-#         sudo sed -i '/MAKEFLAGS=/s/.*/MAKEFLAGS="-j'$(nproc)'"/' /etc/makepkg.conf
-# 
-#         # Modify manjaro-chrootbuild
-#         sudo sed -i 's|https://repo.manjaro.org/repo|https://nnenix.mm.fcix.net/manjaro|' /usr/lib/manjaro-chrootbuild/util.sh
-#         sudo sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
-# 
-#         # Update package lists
-#         sudo pacman -Syy
-# 
-#         # Install additional dependencies
-#         sudo pacman -S --needed --noconfirm base-devel cmake fakeroot jq libarchive openssl zip python-pip
-#         sudo pip3 install meson ninja
-# 
-#   
-#     # Clone repository or AUR package
-#     - name: Clone and prepare source
-#       shell: bash
-#       run: |
-#         if [ "${{ inputs.build_env }}" = "aur" ]; then
-#           echo "Cloning AUR package: ${{ inputs.AUR_PACKAGE }}"
-#           git clone https://aur.archlinux.org/${{ inputs.AUR_PACKAGE }}.git
-#           cd ${{ inputs.AUR_PACKAGE }}
-#         else
-#           echo "Cloning GitHub repository: ${{ github.event.client_payload.url }}"
-#           git clone ${{ github.event.client_payload.url }}.git
-#           cd $(basename ${{ github.event.client_payload.url }})
-#           git checkout ${{ inputs.git_branch }}
-#         fi
-# 
-#     # Baild Package
-#     - name: Build Package
-#       shell: bash
-#       run: |
-#         if [ "${{ inputs.build_env }}" = "aur" ]; then
-#           # Build AUR package
-#           cd ${{ inputs.AUR_PACKAGE }}
-#           makepkg -s --noconfirm --needed
-#         else
-#           # Build non-AUR package
-#           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-#           cd $gitfolder
-#           
-#           # Set architecture if needed
-#           pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
-#           if [ "$pkgArch" = "any" ]; then
-#             sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
-#           fi
-#           
-#           # Build for x86_64
-#           if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
-#             echo -e "\033[01;31mBuild x86_64\033[0m"
-#             sudo chrootbuild -H -p . -b ${{ inputs.build_env }}
-#           fi
-#         fi
-    
+    # Configure repositories based on build environment
+    - name: Configure repositories
+      shell: bash
+      run: |
+        if [ "${{ inputs.build_env }}" == "testing" ]; then
+          echo '
+          [community-testing]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/testing/$arch
+
+          [biglinux-testing]
+          SigLevel = PackageRequired
+          Server = https://repo.biglinux.com.br/testing/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+        elif [ "${{ inputs.build_env }}" == "stable" ]; then
+          echo '
+          [community-stable]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/stable/$arch
+
+          [biglinux-stable]
+          SigLevel = PackageRequired
+          Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+        else
+          echo "Invalid build environment specified"
+          exit 1
+        fi
+
+        # Update PACKAGER
+        echo 'PACKAGER="Community Package Build <talesam@gmail.com>"' | sudo tee -a /etc/makepkg.conf > /dev/null
+
+    # Setup TMATE Session if needed
+    - name: Setup TMATE Session
+      uses: mxschmitt/action-tmate@v3
+      if: "${{ inputs.tmate == 'true' }}"
+
+    # Download source code
+    - name: Download Source
+      if: "${{ inputs.tmate == '' }}"
+      shell: bash
+      run: |
+        git clone ${{ github.event.client_payload.url }}.git
+
+    # Build the package
+    - name: build package
+      shell: bash
+      if: "${{ inputs.tmate == '' }}"
+      run: |
+        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+        cd $gitfolder
         
-#     # Setup TMATE Session if needed
-#     - name: Setup TMATE Session
-#       uses: mxschmitt/action-tmate@v3
-#       if: "${{ inputs.tmate == 'true' }}"
+        if [ -n "$(echo ${{ github.event.client_payload.url }} | grep -E 'https://github.com/(biglinux|communitybig)/')" ]; then
+          git checkout ${{ inputs.git_branch }}
+          sed -i '/source=/s/\.git"/\.git#branch=${{ inputs.git_branch }}"/' PKGBUILD
+        fi
+        
+        ${{ github.event.client_payload.command }}
+        ${{ inputs.extracommand }}
+        
+        echo "branch_build=${{ inputs.build_env }}"
+        
+        build_opt=("-H" "-p ." "-b ${{ inputs.build_env }}" )
+        [[ ! -z "${{ inputs.custom-repo }}" ]] && build_opt+=("-k ${{ inputs.custom-repo }}")
+        [[ "${{ inputs.multilib }}" == "true" ]] && build_opt+=("-m")
+        
+        echo "cmd=chrootbuild ${build_opt[@]}"
+        sudo chrootbuild ${build_opt[@]}
 
-#     # Download source code
-#     - name: Download Source
-#       if: "${{ inputs.tmate == '' }}"
-#       shell: bash
-#       run: |
-#         git clone ${{ github.event.client_payload.url }}.git
+    # Rename the package if necessary
+    - name: Rename Package
+      shell: bash -O extglob {0}
+      run: |
+        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+        cd $gitfolder
+        for i in *.zst; do if [ -n "$(ls $i | grep :)" ]; then mv $i $(echo $i | sed 's/:/-/'); fi; done
 
-#     # Build the package
-#     - name: build package
-#       shell: bash
-#       if: "${{ inputs.tmate == '' }}"
-#       run: |
-#         gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-#         cd $gitfolder
-#         
-#         if [ -n "$(echo ${{ github.event.client_payload.url }} | grep -E 'https://github.com/(biglinux|communitybig)/')" ]; then
-#           git checkout ${{ inputs.git_branch }}
-#           sed -i '/source=/s/\.git"/\.git#branch=${{ inputs.git_branch }}"/' PKGBUILD
-#         fi
-#         
-#         ${{ github.event.client_payload.command }}
-#         ${{ inputs.extracommand }}
-#         
-#         echo "branch_build=${{ inputs.build_env }}"
-#         
-#         build_opt=("-H" "-p ." "-b ${{ inputs.build_env }}" )
-#         [[ ! -z "${{ inputs.custom-repo }}" ]] && build_opt+=("-k ${{ inputs.custom-repo }}")
-#         [[ "${{ inputs.multilib }}" == "true" ]] && build_opt+=("-m")
-#         
-#         echo "cmd=chrootbuild ${build_opt[@]}"
-#         sudo chrootbuild ${build_opt[@]}
+    # Sign the package
+    - name: sign package
+      shell: bash -O extglob {0}
+      run: |
+        cat <(echo -e "${{ inputs.gpg-key }}") | gpg --batch --import &>/dev/null
+        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+        cd $gitfolder
+        for p in $(find $PWD -maxdepth 1 -regex '.*\.pkg\.tar\.\(xz\|zst\)'); do
+          gpg --pinentry-mode loopback --passphrase "${{ inputs.gpg-passphrase }}" --detach-sign ${p}
+        done
 
-#     # Rename the package if necessary
-#     - name: Rename Package
-#       shell: bash -O extglob {0}
-#       run: |
-#         gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-#         cd $gitfolder
-#         for i in *.zst; do if [ -n "$(ls $i | grep :)" ]; then mv $i $(echo $i | sed 's/:/-/'); fi; done
-
-#     # Sign the package
-#     - name: sign package
-#       shell: bash -O extglob {0}
-#       run: |
-#         cat <(echo -e "${{ inputs.gpg-key }}") | gpg --batch --import &>/dev/null
-#         gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-#         cd $gitfolder
-#         for p in $(find $PWD -maxdepth 1 -regex '.*\.pkg\.tar\.\(xz\|zst\)'); do
-#           gpg --pinentry-mode loopback --passphrase "${{ inputs.gpg-passphrase }}" --detach-sign ${p}
-#         done
-
-#     # Generate checksums for the package
-#     - name: CheckSum
-#       shell: bash -O extglob {0}
-#       run: |
-#         gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-#         cd $gitfolder
-#         echo '#!/bin/bash
-#         for i in $(ls *.zst); do md5sum $i >> $i.md5; done
-#         for i in $(ls *.sig | sed 's/.sig//'); do md5sum $i.sig >> $i.md5; done
-#         exit 0' > md5.sh
-#         bash md5.sh
+    # Generate checksums for the package
+    - name: CheckSum
+      shell: bash -O extglob {0}
+      run: |
+        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+        cd $gitfolder
+        echo '#!/bin/bash
+        for i in $(ls *.zst); do md5sum $i >> $i.md5; done
+        for i in $(ls *.sig | sed 's/.sig//'); do md5sum $i.sig >> $i.md5; done
+        exit 0' > md5.sh
+        bash md5.sh

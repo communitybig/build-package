@@ -86,7 +86,7 @@ inputs:
     description: 'Telegram chat ID for notifications'
     required: false
   branch_type:
-    description: 'Branch type (testing or stable)'
+    description: 'Branch type (testing, stable, or aur)'
     required: true
   url:
     description: 'URL do repositório'
@@ -214,10 +214,17 @@ runs:
           sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
         fi
         
-        # Build for x86_64
-        if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
-          echo -e "\033[01;31mBuild x86_64\033[0m"
-          sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ inputs.branch_type }}"
+        # Verifica se é um pacote AUR
+        if [ "${{ inputs.branch_type }}" == "aur" ]; then
+          echo "Construindo pacote AUR"
+          # Use makepkg em vez de chrootbuild para pacotes AUR
+          sudo -u builduser bash -c "makepkg -s --noconfirm"
+        else
+          # Build original para pacotes não-AUR
+          if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
+            echo -e "\033[01;31mBuild x86_64\033[0m"
+            sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ inputs.branch_type }}"
+          fi
         fi
         
         # Executa comando extra, se fornecido
@@ -364,6 +371,8 @@ runs:
         # Set the branch based on BRANCH_TYPE
         if [ "${{ inputs.branch_type }}" == "stable" ]; then
           branch="STABLE"
+        elif [ "${{ inputs.branch_type }}" == "aur" ]; then
+          branch="AUR"
         else
           branch="TESTING"
         fi
@@ -419,6 +428,9 @@ runs:
         elif [ "${{ inputs.branch_type }}" == "stable" ]; then
           branch="STABLE"
           db_name="community-stable"
+        elif [ "${{ inputs.branch_type }}" == "aur" ]; then
+          branch="AUR"
+          db_name="community-aur"
         else
           echo "Error: Unknown branch type: ${{ inputs.branch_type }}"
           exit 1
