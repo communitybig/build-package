@@ -140,7 +140,7 @@ runs:
         ninja --version
   
   
-   - name: Configure System and Repositories
+    - name: Configure System and Repositories
       shell: bash
       run: |
         echo "Build environment: ${{ inputs.build_env }}"
