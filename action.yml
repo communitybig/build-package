@@ -3,7 +3,7 @@ description: 'Builds Manjaro/Community Packages'
 
 inputs:
   build_env:
-    description: 'Build environment (testing or stable)'
+    description: 'Build environment (testing, stable, or aur)'
     required: true
     default: 'testing'
   source:
@@ -97,6 +97,10 @@ inputs:
   package_name:
     description: 'Nome do pacote'
     required: false
+  aur_package_dir:
+    description: 'Directory containing the AUR package'
+    required: false
+    default: '.'
 
 # Definição dos passos da ação
 runs:
@@ -129,6 +133,7 @@ runs:
     - name: Configure System and Repositories
       shell: bash
       run: |
+        echo "Build environment: ${{ inputs.build_env }}"
         # Set up pacman mirror
         echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
         
@@ -204,6 +209,9 @@ runs:
     - name: Build package
       shell: bash
       run: |
+        # Debug: Mostrar ambiente de build
+        echo "Build environment: ${{ inputs.build_env }}"
+        
         # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
         if [ -d "source_repo" ]; then
           cd source_repo
@@ -219,23 +227,29 @@ runs:
         passwd -d builduser
         printf 'builduser ALL=(ALL) ALL\n' | sudo tee -a /etc/sudoers
         
-        # Find and enter the directory containing PKGBUILD
-        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-        cd $gitfolder
-        
-        # Set architecture
-        pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
-        if [ "$pkgArch" = "any" ]; then
-          sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
-        fi
-        
-        # Verifica se é um pacote AUR
-        if [ "${{ inputs.branch_type }}" == "aur" ]; then
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          # Para pacotes AUR
+          cd ${{ inputs.aur_package_dir }}
           echo "Construindo pacote AUR"
-          # Use makepkg em vez de chrootbuild para pacotes AUR
+          echo "Current AUR package directory: $(pwd)"
+          echo "AUR package directory contents:"
+          ls -la
+          
+          # Use makepkg para construir o pacote AUR
           sudo -u builduser bash -c "makepkg -s --noconfirm"
         else
-          # Build original para pacotes não-AUR
+          # Para pacotes não-AUR
+          # Find and enter the directory containing PKGBUILD
+          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          cd $gitfolder
+          
+          # Set architecture
+          pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
+          if [ "$pkgArch" = "any" ]; then
+            sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
+          fi
+          
+          # Build for x86_64
           if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
             echo -e "\033[01;31mBuild x86_64\033[0m"
             sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ inputs.branch_type }}"

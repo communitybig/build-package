@@ -53,6 +53,7 @@ jobs:
         publish_github: 'true'
         push_to_repo: 'true'
         update_db: 'true'
+        aur_package_dir: './aur_package'
 
     - name: Cleanup
       if: always()
