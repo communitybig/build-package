@@ -134,6 +134,9 @@ runs:
       shell: bash
       run: |
         echo "Build environment: ${{ inputs.build_env }}"
+        echo "Build environment from env: $DEBUG_BUILD_ENV"
+        echo "All inputs:"
+        echo "${{ toJson(inputs) }}"
         # Set up pacman mirror
         echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
         
