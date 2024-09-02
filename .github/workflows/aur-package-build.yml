@@ -37,8 +37,8 @@ jobs:
     - name: Build and Publish Package
       uses: ./
       with:
-        build_env: ${{ env.BRANCH_TYPE }}
-        branch_type: ${{ env.BRANCH_TYPE }}
+        build_env: aur
+        branch_type: aur
         package_name: ${{ env.PACKAGE_NAME }}
         github_token: ${{ secrets.GITHUB_TOKEN }}
         gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
