@@ -2,12 +2,13 @@ name: AUR Package Build
 
 on:
   repository_dispatch:
-    types: [aur-package-build]
+    types: 
+      - 'aur-*'
 
 env:
   PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
   AUR_URL: ${{ github.event.client_payload.aur_url }}
-  BRANCH_TYPE: aur
+  BRANCH_TYPE: ${{ github.event.client_payload.branch_type }}
 
 jobs:
   build:
@@ -38,10 +39,9 @@ jobs:
       uses: ./
       with:
         build_env: aur
-        build_env_alt: ${{ 'aur' }}
-        build_env_env: ${{ env.BRANCH_TYPE }}
-        branch_type: aur
+        branch_type: ${{ env.BRANCH_TYPE }}
         package_name: ${{ env.PACKAGE_NAME }}
+        aur_url: ${{ env.AUR_URL }}
         github_token: ${{ secrets.GITHUB_TOKEN }}
         gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
         gpg_passphrase: ${{ secrets.PASSPHRASE }}
@@ -57,8 +57,8 @@ jobs:
         update_db: 'true'
         aur_package_dir: './aur_package'
       env:
-        DEBUG_BUILD_ENV: aur
-        DEBUG_INPUTS: ${{ toJson(inputs) }}
+        BRANCH_TYPE: ${{ env.BRANCH_TYPE }}
+
 
     - name: Cleanup
       if: always()

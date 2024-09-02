@@ -174,8 +174,8 @@ runs:
           [biglinux-stable]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
-        elif [ "${{ inputs.build_env }}" == "aur" ] || [ "$BRANCH_TYPE" == "aur" ]; then
-          echo "Configurando para pacote AUR"
+        elif [ "${{ inputs.build_env }}" == "aur" ] || [ "${{ inputs.branch_type }}" == "aur" ] || [ "$BRANCH_TYPE" == "aur" ]; then
+          echo "Configurando para pacote AUR: ${{ inputs.package_name }}"
           # Configurações específicas para AUR
           sudo sed -i 's/^#MAKEFLAGS="-j2"/MAKEFLAGS="-j$(nproc)"/' /etc/makepkg.conf
           sudo sed -i 's/^#BUILDDIR/BUILDDIR/' /etc/makepkg.conf
