@@ -293,13 +293,8 @@ runs:
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
           cd $gitfolder
           
-          # Set architecture
-          pkgArch=$(grep -E "^arch=" PKGBUILD | cut -d'=' -f2 | tr -d "(')" | tr ' ' '\n' | sort -u | tr '\n' ' ')
-          if [[ $pkgArch == *"any"* ]]; then
-            sed -i "/^arch=/c\arch=('any')" PKGBUILD
-          elif [[ $pkgArch != *"x86_64"* && $pkgArch != *"aarch64"* ]]; then
-            sed -i "/^arch=/c\arch=('x86_64' 'aarch64')" PKGBUILD
-          fi
+          # Ensure architecture is set to x86_64
+          sed -i "/^arch=/c\arch=('x86_64')" PKGBUILD
           
           # Build for x86_64
           echo -e "\033[01;31mBuild x86_64\033[0m"
