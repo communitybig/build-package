@@ -3,7 +3,7 @@ description: 'Builds Manjaro/Community Packages'
 
 inputs:
   build_env:
-    description: 'Build environment (testing or stable)'
+    description: 'Build environment (testing, stable, or aur)'
     required: true
     default: 'testing'
   source:
@@ -86,7 +86,7 @@ inputs:
     description: 'Telegram chat ID for notifications'
     required: false
   branch_type:
-    description: 'Branch type (testing or stable)'
+    description: 'Branch type (testing, stable, or aur)'
     required: true
   url:
     description: 'URL do repositório'
@@ -97,11 +97,25 @@ inputs:
   package_name:
     description: 'Nome do pacote'
     required: false
+  aur_package_dir:
+    description: 'Directory containing the AUR package'
+    required: false
+    default: '.'
 
 # Definição dos passos da ação
 runs:
   using: "composite"
   steps:
+    - name: Debug Inputs
+      shell: bash
+      run: |
+        echo "DEBUG: All inputs"
+        echo "${{ toJson(inputs) }}"
+        echo "DEBUG: build_env from input: ${{ inputs.build_env }}"
+        echo "DEBUG: build_env from env: $DEBUG_BUILD_ENV"
+        echo "DEBUG: All env variables"
+        env | sort
+  
     # Configuração do ambiente de build
     - name: Setup build environment
       shell: bash
@@ -129,6 +143,12 @@ runs:
     - name: Configure System and Repositories
       shell: bash
       run: |
+        echo "Build environment: ${{ inputs.build_env }}"
+        echo "Build environment from env: $DEBUG_BUILD_ENV"
+        echo "All inputs:"
+        echo "${{ toJson(inputs) }}"
+        echo "DEBUG: BRANCH_TYPE: $BRANCH_TYPE"
+        
         # Set up pacman mirror
         echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
         
@@ -136,7 +156,7 @@ runs:
         sudo sed -i '/biglinux/,$d' /etc/pacman.conf
         
         # Add appropriate repositories based on build environment
-        if [ "${{ inputs.build_env }}" == "testing" ]; then
+        if [ "${{ inputs.build_env }}" == "testing" ] || [ "$BRANCH_TYPE" == "testing" ]; then
           echo '
           [community-testing]
           SigLevel = PackageRequired
@@ -145,7 +165,7 @@ runs:
           [biglinux-testing]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/testing/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
-        elif [ "${{ inputs.build_env }}" == "stable" ]; then
+        elif [ "${{ inputs.build_env }}" == "stable" ] || [ "$BRANCH_TYPE" == "stable" ]; then
           echo '
           [community-stable]
           SigLevel = PackageRequired
@@ -154,8 +174,23 @@ runs:
           [biglinux-stable]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+        elif [ "${{ inputs.build_env }}" == "aur" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
+          echo "Configurando para pacote AUR: ${{ inputs.package_name }}"
+          # Configurações específicas para AUR
+          sudo sed -i 's/^#MAKEFLAGS="-j2"/MAKEFLAGS="-j$(nproc)"/' /etc/makepkg.conf
+          sudo sed -i 's/^#BUILDDIR/BUILDDIR/' /etc/makepkg.conf
+          sudo sed -i 's/^#PKGDEST/PKGDEST/' /etc/makepkg.conf
+          
+          # Habilitar o repositório multilib (necessário para alguns pacotes AUR)
+          sudo sed -i '/\[multilib\]/,/Include/s/^#//' /etc/pacman.conf
+          
+          # Atualizar os repositórios após as mudanças
+          sudo pacman -Sy
+          
+          # Instalar dependências comumente necessárias para builds AUR
+          sudo pacman -S --needed base-devel git --noconfirm
         else
-          echo "Invalid build environment specified"
+          echo "Invalid branch type specified: ${{ inputs.branch_type }}"
           exit 1
         fi
         
@@ -168,11 +203,24 @@ runs:
         sudo sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
 
   
-    # # Download the source code
+    # Download the source code
     - name: Download Source
       shell: bash
       run: |
-        if [ -n "${{ inputs.url }}" ]; then
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          echo "Cloning AUR package from ${{ inputs.url }}"
+          git clone ${{ inputs.url }} aur_package
+          if [ -d "aur_package" ]; then
+            cd aur_package
+            if [ ! -f "PKGBUILD" ]; then
+              echo "Error: PKGBUILD not found in the AUR package"
+              exit 1
+            fi
+          else
+            echo "Error: Failed to clone AUR package"
+            exit 1
+          fi
+        elif [ -n "${{ inputs.url }}" ]; then
           echo "Cloning repository from ${{ inputs.url }}"
           git clone ${{ inputs.url }}.git source_repo
           cd source_repo
@@ -183,13 +231,21 @@ runs:
         else
           echo "No URL provided, assuming we're already in the correct repository"
         fi
+        
+        # Debug: Show current directory and contents
+        echo "Current directory: $(pwd)"
+        echo "Directory contents:"
+        ls -la
   
   
     # Constrói o pacote
     - name: Build package
       shell: bash
       run: |
-        # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
+        # Debug: Mostrar ambiente de build
+        echo "Build environment: ${{ inputs.build_env }}"
+        
+         # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
         if [ -d "source_repo" ]; then
           cd source_repo
         fi
@@ -204,27 +260,55 @@ runs:
         passwd -d builduser
         printf 'builduser ALL=(ALL) ALL\n' | sudo tee -a /etc/sudoers
         
-        # Find and enter the directory containing PKGBUILD
-        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-        cd $gitfolder
-        
-        # Set architecture
-        pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
-        if [ "$pkgArch" = "any" ]; then
-          sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
-        fi
-        
-        # Build for x86_64
-        if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
-          echo -e "\033[01;31mBuild x86_64\033[0m"
-          sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ inputs.branch_type }}"
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          # Para pacotes AUR
+          cd ${{ inputs.aur_package_dir }}
+          echo "Construindo pacote AUR"
+          echo "Current AUR package directory: $(pwd)"
+          echo "AUR package directory contents:"
+          ls -la
+          
+          echo "Debug AUR package:"
+          echo "Current directory: $(pwd)"
+          echo "Contents of current directory:"
+          ls -la
+          if [ -f "PKGBUILD" ]; then
+            echo "PKGBUILD found:"
+            cat PKGBUILD
+          else
+            echo "PKGBUILD not found in current directory"
+            exit 1
+          fi
+          
+          # Use makepkg para construir o pacote AUR
+          sudo -u builduser bash -c "makepkg -s --noconfirm"
+        else
+          # Para pacotes não-AUR
+          # Find and enter the directory containing PKGBUILD
+          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          cd $gitfolder
+          
+          # Set architecture
+          pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
+          if [ "$pkgArch" = "any" ]; then
+            sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
+          fi
+          
+          # Build for x86_64
+          if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
+            echo -e "\033[01;31mBuild x86_64\033[0m"
+            sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ inputs.branch_type }}"
+          fi
         fi
         
         # Executa comando extra, se fornecido
         if [ -n "${{ inputs.extra_command }}" ]; then
           echo "Executando comando extra: ${{ inputs.extra_command }}"
           ${{ inputs.extra_command }}
-        fi
+        
+        # Debug: Mostrar conteúdo do diretório após o build
+        echo "Directory contents after build:"
+        ls -la
 
   
     # Assina o pacote
@@ -364,6 +448,8 @@ runs:
         # Set the branch based on BRANCH_TYPE
         if [ "${{ inputs.branch_type }}" == "stable" ]; then
           branch="STABLE"
+        elif [ "${{ inputs.branch_type }}" == "aur" ]; then
+          branch="AUR"
         else
           branch="TESTING"
         fi
@@ -419,6 +505,9 @@ runs:
         elif [ "${{ inputs.branch_type }}" == "stable" ]; then
           branch="STABLE"
           db_name="community-stable"
+        elif [ "${{ inputs.branch_type }}" == "aur" ]; then
+          branch="AUR"
+          db_name="community-aur"
         else
           echo "Error: Unknown branch type: ${{ inputs.branch_type }}"
           exit 1
