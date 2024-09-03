@@ -133,7 +133,8 @@ runs:
           openssl \
           zip \
           meson \
-          ninja
+          ninja \
+          yay
           
         # Verifica as versões instaladas
         meson --version
@@ -259,7 +260,8 @@ runs:
         # Create build user
         useradd builduser -m
         passwd -d builduser
-        printf 'builduser ALL=(ALL) ALL\n' | sudo tee -a /etc/sudoers
+        #printf 'builduser ALL=(ALL) ALL\n' | sudo tee -a /etc/sudoers
+        echo "builduser ALL=(ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers
         
         # Create and set permissions for $PKGDEST and $SRCDEST
         sudo mkdir -p /home/packages /home/sources
@@ -273,10 +275,6 @@ runs:
           echo "AUR package directory contents:"
           ls -la
           
-          echo "Debug AUR package:"
-          echo "Current directory: $(pwd)"
-          echo "Contents of current directory:"
-          ls -la
           if [ -f "PKGBUILD" ]; then
             echo "PKGBUILD found:"
             cat PKGBUILD
@@ -288,25 +286,24 @@ runs:
           # Give permissions to builduser for the current directory
           sudo chown -R builduser:builduser .
           
-          # Use makepkg para construir o pacote AUR
-          sudo -u builduser bash -c "PKGDEST=/home/packages SRCDEST=/home/sources makepkg -s --noconfirm"
+            # Use yay para construir o pacote AUR
+            sudo -u builduser bash -c "yay -Sy --needed --noconfirm --builddir=/home/sources --aur $(basename $(pwd))"
         else
           # Para pacotes não-AUR
-          # Find and enter the directory containing PKGBUILD
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
           cd $gitfolder
           
           # Set architecture
-          pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
-          if [ "$pkgArch" = "any" ]; then
-            sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
+          pkgArch=$(grep -E "^arch=" PKGBUILD | cut -d'=' -f2 | tr -d "(')" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+          if [[ $pkgArch == *"any"* ]]; then
+            sed -i "/^arch=/c\arch=('any')" PKGBUILD
+          elif [[ $pkgArch != *"x86_64"* && $pkgArch != *"aarch64"* ]]; then
+            sed -i "/^arch=/c\arch=('x86_64' 'aarch64')" PKGBUILD
           fi
           
           # Build for x86_64
-          if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
-            echo -e "\033[01;31mBuild x86_64\033[0m"
-            sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ inputs.branch_type }}"
-          fi
+          echo -e "\033[01;31mBuild x86_64\033[0m"
+          sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ inputs.branch_type }}"
         fi
         
         # Executa comando extra, se fornecido
@@ -317,9 +314,11 @@ runs:
         
         # Debug: Mostrar conteúdo do diretório após o build
         echo "Directory contents after build:"
-        ls 
+        ls -la
         echo "Contents of /home/packages:"
         ls -la /home/packages
+        echo "Contents of /home/sources:"
+        ls -la /home/sources
 
   
     # Assina o pacote
