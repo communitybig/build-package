@@ -1,28 +1,89 @@
-name: Debug AUR Package Build
+name: AUR Package Build
 
 on:
   repository_dispatch:
     types: 
       - 'aur-*'
 
+env:
+  PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
+  AUR_URL: ${{ github.event.client_payload.aur_url }}
+  BRANCH_TYPE: ${{ github.event.client_payload.branch_type }}
+  BUILD_ENV: ${{ github.event.client_payload.build_env }}
+
 jobs:
-  debug:
+  build:
     runs-on: ubuntu-latest
+    container:
+      image: talesam/community-build:1.1
+      options: --privileged
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Debug Payload
+    - name: Setup SSH Agent
+      env:
+        SSH_AUTH_SOCK: /tmp/ssh_agent.sock
       run: |
-        echo "Event type: ${{ github.event.action }}"
-        echo "Package Name: ${{ github.event.client_payload.package_name }}"
-        echo "AUR URL: ${{ github.event.client_payload.aur_url }}"
-        echo "Branch Type: ${{ github.event.client_payload.branch_type }}"
-        echo "Full client payload:"
-        echo '${{ toJson(github.event.client_payload) }}'
+        ssh-agent -a $SSH_AUTH_SOCK > /dev/null
+        ssh-add - <<< "${{ secrets.PKGBUILD_KEY }}"
+        echo "SSH_AUTH_SOCK=/tmp/ssh_agent.sock" >> $GITHUB_ENV
 
-    - name: Debug Environment
+    - name: Debug Environment Variables
       run: |
-        echo "All environment variables:"
-        env | sort
+        echo "PACKAGE_NAME: ${{ env.PACKAGE_NAME }}"
+        echo "AUR_URL: ${{ env.AUR_URL }}"
+        echo "BRANCH_TYPE: ${{ env.BRANCH_TYPE }}"
+        echo "BUILD_ENV: ${{ env.BUILD_ENV }}"
+
+    - name: Clone AUR Package
+      run: |
+        git clone ${{ env.AUR_URL }} aur_package
+        cd aur_package
+        ls -la
+
+    - name: Build and Publish Package
+      uses: ./
+      with:
+        build_env: ${{ env.BUILD_ENV }}
+        branch_type: ${{ env.BRANCH_TYPE }}
+        package_name: ${{ env.PACKAGE_NAME }}
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
+        gpg_passphrase: ${{ secrets.PASSPHRASE }}
+        telegram_token: ${{ secrets.TOKEN_BOT }}
+        telegram_chat_id: ${{ secrets.CHAT_ID }}
+        repo_host: ${{ secrets.PKGBUILD_HOST }}
+        repo_user: ${{ secrets.PKGBUILD_USER }}
+        repo_port: ${{ secrets.PKGBUILD_PORT }}
+        repo_dir: ${{ secrets.PKGBUILD_DIR }}
+        url: ${{ env.AUR_URL }}
+        publish_github: 'true'
+        push_to_repo: 'true'
+        update_db: 'true'
+        aur_package_dir: './aur_package'
+
+    - name: Debug Build Output
+      if: always()
+      run: |
+        echo "Build completed with status: ${{ job.status }}"
+        ls -R ./aur_package
+
+    - name: Cleanup
+      if: always()
+      run: |
+        rm -rf aur_package
+
+    - name: Send Telegram Notification
+      if: always()
+      run: |
+        status="${{ job.status }}"
+        if [ "$status" = "success" ]; then
+          message="✅ Pacote AUR ${{ env.PACKAGE_NAME }} construído com sucesso!"
+        else
+          message="❌ Falha na construção do pacote AUR ${{ env.PACKAGE_NAME }}. Verifique os logs para mais detalhes."
+        fi
+        curl -s -X POST "https://api.telegram.org/bot${{ secrets.TOKEN_BOT }}/sendMessage" \
+             -d chat_id="${{ secrets.CHAT_ID }}" \
+             -d text="$message"
