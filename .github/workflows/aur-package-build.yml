@@ -64,26 +64,7 @@ jobs:
         update_db: 'true'
         aur_package_dir: './aur_package'
 
-    - name: Debug Build Output
-      if: always()
-      run: |
-        echo "Build completed with status: ${{ job.status }}"
-        ls -R ./aur_package
-
     - name: Cleanup
       if: always()
       run: |
         rm -rf aur_package
-
-    - name: Send Telegram Notification
-      if: always()
-      run: |
-        status="${{ job.status }}"
-        if [ "$status" = "success" ]; then
-          message="✅ Pacote AUR ${{ env.PACKAGE_NAME }} construído com sucesso!"
-        else
-          message="❌ Falha na construção do pacote AUR ${{ env.PACKAGE_NAME }}. Verifique os logs para mais detalhes."
-        fi
-        curl -s -X POST "https://api.telegram.org/bot${{ secrets.TOKEN_BOT }}/sendMessage" \
-             -d chat_id="${{ secrets.CHAT_ID }}" \
-             -d text="$message"
