@@ -281,11 +281,17 @@ runs:
           
           # Use yay para construir o pacote AUR
           echo "Building AUR package with yay: ${{ inputs.package_name }}"
-          sudo -u builduser bash -c "command -v yay || echo 'yay is not installed'"
-          sudo -u builduser bash -c "yay -Sy --needed --noconfirm --builddir=/home/sources -b ."
+          echo "Synchronizing databases with yay"
+          sudo -u builduser yay -Sy --noconfirm
+          
+          echo "Building AUR package with yay: ${{ inputs.package_name }}"
+          sudo -u builduser yay -S --noconfirm --builddir=/home/sources --noprogressbar -b .
+          
+          echo "Yay build completed. Checking /home/sources:"
+          ls -la /home/sources
           
           # Mover o pacote compilado para /home/packages
-          sudo -u builduser bash -c "mv /home/sources/*.pkg.tar.zst /home/packages/ || true"
+          sudo -u builduser bash -c "mv /home/sources/*.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'"
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
