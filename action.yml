@@ -40,9 +40,7 @@ inputs:
     required: false
   tmate:
     description: 'Run tmate for debugging'
-    type: boolean
     required: false
-    default: false
   repo_mirror:
     description: 'Mirror to use in build'
     default: repo
@@ -240,12 +238,12 @@ runs:
         echo "Directory contents:"
         ls -la
   
-    # Setup tmate session for debugging if enabled
-    - name: Setup tmate session
+  
+    ### Setup tmate session for debugging if enabled
+    - name: Setup TMATE Session
       uses: mxschmitt/action-tmate@v3
-      if: ${{ github.event_name == 'workflow_dispatch' && inputs.tmate == 'true' }}
-      with:
-        limit-access-to-actor: true
+      if: "${{ inputs.tmate == 'true' }}"
+
   
     # Constrói o pacote
     - name: Build package
