@@ -261,9 +261,9 @@ runs:
         passwd -d builduser
         printf 'builduser ALL=(ALL) ALL\n' | sudo tee -a /etc/sudoers
         
-        # Create and set permissions for $PKGDEST
-        sudo mkdir -p /home/packages
-        sudo chown builduser:builduser /home/packages
+        # Create and set permissions for $PKGDEST and $SRCDEST
+        sudo mkdir -p /home/packages /home/sources
+        sudo chown builduser:builduser /home/packages /home/sources
         
         if [ "${{ inputs.build_env }}" == "aur" ]; then
           # Para pacotes AUR
@@ -285,8 +285,11 @@ runs:
             exit 1
           fi
           
+          # Give permissions to builduser for the current directory
+          sudo chown -R builduser:builduser .
+          
           # Use makepkg para construir o pacote AUR
-          sudo -u builduser bash -c "PKGDEST=/home/packages makepkg -s --noconfirm"
+          sudo -u builduser bash -c "PKGDEST=/home/packages SRCDEST=/home/sources makepkg -s --noconfirm"
         else
           # Para pacotes não-AUR
           # Find and enter the directory containing PKGBUILD
