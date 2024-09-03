@@ -73,18 +73,12 @@ jobs:
         ssh-add - <<< "${{ secrets.PKGBUILD_KEY }}"
         echo "SSH_AUTH_SOCK=/tmp/ssh_agent.sock" >> $GITHUB_ENV
 
-    - name: Clone AUR Package
-      run: |
-        git clone ${{ env.AUR_URL }} aur_package
-        cd aur_package
-        ls -la
-
     - name: Build and Publish Package
       uses: ./
       with:
-        build_env: ${{ env.BUILD_ENV }}
-        branch_type: ${{ env.BRANCH_TYPE }}
-        package_name: ${{ env.PACKAGE_NAME }}
+        build_env: ${{ github.event.client_payload.build_env }}
+        branch_type: ${{ github.event.client_payload.branch_type }}
+        package_name: ${{ github.event.client_payload.package_name }}
         github_token: ${{ secrets.GITHUB_TOKEN }}
         gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
         gpg_passphrase: ${{ secrets.PASSPHRASE }}
@@ -94,12 +88,11 @@ jobs:
         repo_user: ${{ secrets.PKGBUILD_USER }}
         repo_port: ${{ secrets.PKGBUILD_PORT }}
         repo_dir: ${{ secrets.PKGBUILD_DIR }}
-        url: ${{ env.AUR_URL }}
-        publish_github: ${{ inputs.publish_github }}
-        push_to_repo: ${{ inputs.push_to_repo }}
-        update_db: ${{ inputs.update_db }}
+        url: ${{ github.event.client_payload.aur_url }}
+        publish_github: 'true'
+        push_to_repo: 'true'
+        update_db: 'true'
         aur_package_dir: './aur_package'
-        extra_command: ${{ inputs.extra_command }}
 
     - name: Cleanup
       if: always()

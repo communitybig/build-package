@@ -203,11 +203,24 @@ runs:
         sudo sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
 
   
-    # # Download the source code
+    # Download the source code
     - name: Download Source
       shell: bash
       run: |
-        if [ -n "${{ inputs.url }}" ]; then
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          echo "Cloning AUR package from ${{ inputs.url }}"
+          git clone ${{ inputs.url }} aur_package
+          if [ -d "aur_package" ]; then
+            cd aur_package
+            if [ ! -f "PKGBUILD" ]; then
+              echo "Error: PKGBUILD not found in the AUR package"
+              exit 1
+            fi
+          else
+            echo "Error: Failed to clone AUR package"
+            exit 1
+          fi
+        elif [ -n "${{ inputs.url }}" ]; then
           echo "Cloning repository from ${{ inputs.url }}"
           git clone ${{ inputs.url }}.git source_repo
           cd source_repo
@@ -218,6 +231,11 @@ runs:
         else
           echo "No URL provided, assuming we're already in the correct repository"
         fi
+        
+        # Debug: Show current directory and contents
+        echo "Current directory: $(pwd)"
+        echo "Directory contents:"
+        ls -la
   
   
     # Constrói o pacote
@@ -227,10 +245,16 @@ runs:
         # Debug: Mostrar ambiente de build
         echo "Build environment: ${{ inputs.build_env }}"
         
-        # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
-        if [ -d "source_repo" ]; then
-          cd source_repo
+        # Determinar o diretório correto baseado no tipo de build
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          build_dir="aur_package"
+        elif [ -d "source_repo" ]; then
+          build_dir="source_repo"
+        else
+          build_dir="."
         fi
+        
+        cd "$build_dir"
         
         # Debug: Mostrar diretório atual e conteúdo
         echo "Current directory: $(pwd)"
@@ -249,6 +273,18 @@ runs:
           echo "Current AUR package directory: $(pwd)"
           echo "AUR package directory contents:"
           ls -la
+          
+          echo "Debug AUR package:"
+          echo "Current directory: $(pwd)"
+          echo "Contents of current directory:"
+          ls -la
+          if [ -f "PKGBUILD" ]; then
+            echo "PKGBUILD found:"
+            cat PKGBUILD
+          else
+            echo "PKGBUILD not found in current directory"
+            exit 1
+          fi
           
           # Use makepkg para construir o pacote AUR
           sudo -u builduser bash -c "makepkg -s --noconfirm"
@@ -275,7 +311,10 @@ runs:
         if [ -n "${{ inputs.extra_command }}" ]; then
           echo "Executando comando extra: ${{ inputs.extra_command }}"
           ${{ inputs.extra_command }}
-        fi
+        
+        # Debug: Mostrar conteúdo do diretório após o build
+        echo "Directory contents after build:"
+        ls -la
 
   
     # Assina o pacote
