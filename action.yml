@@ -292,14 +292,10 @@ runs:
           
           # Use yay para construir o pacote AUR
           echo "Building AUR package with yay: $pkgname"
-          sudo -u builduser bash -c "yay -Sy --needed --noconfirm --builddir=/home/sources -G $pkgname"
-          
-          # Navegar para o diretório do pacote e compilar
-          cd $pkgname
-          sudo -u builduser bash -c "makepkg -si --noconfirm --needed"
+          sudo -u builduser bash -c "yay -Sy --needed --noconfirm --builddir=/home/sources --noprogressbar -b ."
           
           # Mover o pacote compilado para /home/packages
-          sudo -u builduser bash -c "mv *.pkg.tar.zst /home/packages/"
+          sudo -u builduser bash -c "mv /home/sources/*.pkg.tar.zst /home/packages/ 2>/dev/null || true"
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
