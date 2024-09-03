@@ -245,16 +245,12 @@ runs:
         # Debug: Mostrar ambiente de build
         echo "Build environment: ${{ inputs.build_env }}"
         
-        # Determinar o diretório correto baseado no tipo de build
+        # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
         if [ "${{ inputs.build_env }}" == "aur" ]; then
-          build_dir="aur_package"
+          cd aur_package
         elif [ -d "source_repo" ]; then
-          build_dir="source_repo"
-        else
-          build_dir="."
+          cd source_repo
         fi
-        
-        cd "$build_dir"
         
         # Debug: Mostrar diretório atual e conteúdo
         echo "Current directory: $(pwd)"

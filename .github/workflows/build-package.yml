@@ -2,7 +2,7 @@ name: Build Package
 
 on:
   repository_dispatch:
-    types: ['package-build']
+    types: ['*']
   workflow_dispatch:
     inputs:
       branch_type:
@@ -48,6 +48,7 @@ env:
 
 jobs:
   build:
+    if: ${{ !startsWith(github.event.action, 'aur-') }}
     runs-on: ubuntu-latest
     container:
       image: talesam/community-build:1.1
