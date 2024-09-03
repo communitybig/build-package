@@ -243,7 +243,7 @@ runs:
     - name: Build package
       shell: bash
       run: |
-        set -e  # Isso fará o script falhar se qualquer comando falhar
+        set -ex  # Isso fará o script falhar se qualquer comando falhar
         # Debug: Mostrar ambiente de build
         echo "Build environment: ${{ inputs.build_env }}"
         echo "Package name: ${{ inputs.package_name }}"
@@ -281,10 +281,11 @@ runs:
           
           # Use yay para construir o pacote AUR
           echo "Building AUR package with yay: ${{ inputs.package_name }}"
-          sudo -u builduser bash -c "yay -Sy --needed --noconfirm --builddir=/home/sources --noprogressbar -b ."
+          sudo -u builduser bash -c "command -v yay || echo 'yay is not installed'"
+          sudo -u builduser bash -c "yay -Sy --needed --noconfirm --builddir=/home/sources -b ."
           
           # Mover o pacote compilado para /home/packages
-          sudo -u builduser bash -c "mv /home/sources/*.pkg.tar.zst /home/packages/ 2>/dev/null || true"
+          sudo -u builduser bash -c "mv /home/sources/*.pkg.tar.zst /home/packages/ || true"
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
@@ -311,6 +312,12 @@ runs:
         ls -la /home/packages
         echo "Contents of /home/sources:"
         ls -la /home/sources
+        
+        # Mostrar logs de erro, se existirem
+        if [ -f "/home/sources/yay.log" ]; then
+          echo "Yay log contents:"
+          cat "/home/sources/yay.log"
+        fi
 
   
     # Assina o pacote
