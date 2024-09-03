@@ -246,6 +246,7 @@ runs:
         set -e  # Isso fará o script falhar se qualquer comando falhar
         # Debug: Mostrar ambiente de build
         echo "Build environment: ${{ inputs.build_env }}"
+        echo "Package name: ${{ inputs.package_name }}"
         
          # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
         if [ -d "source_repo" ]; then
@@ -270,28 +271,16 @@ runs:
         if [ "${{ inputs.build_env }}" == "aur" ]; then
           # Para pacotes AUR
           cd ${{ inputs.aur_package_dir }}
-          echo "Construindo pacote AUR"
+          echo "Construindo pacote AUR: ${{ inputs.package_name }}"
           echo "Current AUR package directory: $(pwd)"
           echo "AUR package directory contents:"
           ls -la
-          
-          if [ -f "PKGBUILD" ]; then
-            echo "PKGBUILD found:"
-            cat PKGBUILD
-            
-            # Extrair o nome real do pacote do PKGBUILD
-            pkgname=$(grep -E "^pkgname=" PKGBUILD | cut -d'=' -f2 | tr -d "'\"")
-            echo "Package name extracted from PKGBUILD: $pkgname"
-          else
-            echo "PKGBUILD not found in current directory"
-            exit 1
-          fi
           
           # Give permissions to builduser for the current directory
           sudo chown -R builduser:builduser .
           
           # Use yay para construir o pacote AUR
-          echo "Building AUR package with yay: $pkgname"
+          echo "Building AUR package with yay: ${{ inputs.package_name }}"
           sudo -u builduser bash -c "yay -Sy --needed --noconfirm --builddir=/home/sources --noprogressbar -b ."
           
           # Mover o pacote compilado para /home/packages
