@@ -305,6 +305,7 @@ runs:
         if [ -n "${{ inputs.extra_command }}" ]; then
           echo "Executando comando extra: ${{ inputs.extra_command }}"
           ${{ inputs.extra_command }}
+        fi
         
         # Debug: Mostrar conteúdo do diretório após o build
         echo "Directory contents after build:"
