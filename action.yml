@@ -278,6 +278,10 @@ runs:
           if [ -f "PKGBUILD" ]; then
             echo "PKGBUILD found:"
             cat PKGBUILD
+            
+            # Extrair o nome real do pacote do PKGBUILD
+            pkgname=$(grep -E "^pkgname=" PKGBUILD | cut -d'=' -f2 | tr -d "'\"")
+            echo "Package name extracted from PKGBUILD: $pkgname"
           else
             echo "PKGBUILD not found in current directory"
             exit 1
@@ -286,8 +290,16 @@ runs:
           # Give permissions to builduser for the current directory
           sudo chown -R builduser:builduser .
           
-            # Use yay para construir o pacote AUR
-            sudo -u builduser bash -c "yay -Sy --needed --noconfirm --builddir=/home/sources --aur $(basename $(pwd))"
+          # Use yay para construir o pacote AUR
+          echo "Building AUR package with yay: $pkgname"
+          sudo -u builduser bash -c "yay -Sy --needed --noconfirm --builddir=/home/sources -G $pkgname"
+          
+          # Navegar para o diretório do pacote e compilar
+          cd $pkgname
+          sudo -u builduser bash -c "makepkg -si --noconfirm --needed"
+          
+          # Mover o pacote compilado para /home/packages
+          sudo -u builduser bash -c "mv *.pkg.tar.zst /home/packages/"
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
