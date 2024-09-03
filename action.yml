@@ -245,10 +245,8 @@ runs:
         # Debug: Mostrar ambiente de build
         echo "Build environment: ${{ inputs.build_env }}"
         
-        # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
-        if [ "${{ inputs.build_env }}" == "aur" ]; then
-          cd aur_package
-        elif [ -d "source_repo" ]; then
+         # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
+        if [ -d "source_repo" ]; then
           cd source_repo
         fi
         
