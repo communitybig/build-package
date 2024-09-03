@@ -2,7 +2,7 @@ name: AUR Package Build
 
 on:
   repository_dispatch:
-    types: ['aur-*']
+    types: ['aur-build']
   workflow_dispatch:
     inputs:
       package_name:
