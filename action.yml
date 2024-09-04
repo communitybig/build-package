@@ -42,6 +42,10 @@ inputs:
   tmate:
     description: 'Run tmate for debugging'
     required: false
+  debug_enabled:
+    description: 'Enable debug mode with tmate'
+    required: false
+    default: 'false'
   repo_mirror:
     description: 'Mirror to use in build'
     default: repo
@@ -243,7 +247,7 @@ runs:
     ### Setup tmate session for debugging if enabled
     - name: Setup TMATE Session
       uses: mxschmitt/action-tmate@v3
-      if: "${{ inputs.tmate == 'true' }}"
+      if: inputs.tmate == 'true' || inputs.debug_enabled == 'true'
       with:
         install-dependencies: false
 
