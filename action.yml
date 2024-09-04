@@ -38,6 +38,7 @@ inputs:
   extra_package:
     description: 'Extra package to build'
     required: false
+    default: 'false'
   tmate:
     description: 'Run tmate for debugging'
     required: false

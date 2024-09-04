@@ -124,24 +124,36 @@ jobs:
       - name: Build and Publish Package
         uses: ./
         with:
+          # Parâmetros relacionados ao ambiente de build e tipo de pacote
           build_env: ${{ env.BRANCH_TYPE }}
           branch_type: ${{ env.BRANCH_TYPE }}
           new_branch: ${{ env.NEW_BRANCH }}
           package_name: ${{ env.PACKAGE_NAME }}
+          url: ${{ env.url }}
+          git_branch: ${{ env.git_branch }}
+          manjaro_branch: ${{ env.manjaro_branch }}
+          repo: ${{ github.repository }}
+
+          # Parâmetros relacionados ao debug e tmate
+          tmate: ${{ github.event.inputs.debug_enabled || 'false' }}
+          
+          # Tokens e chaves de segurança
           github_token: ${{ secrets.GITHUB_TOKEN }}
           gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
           gpg_passphrase: ${{ secrets.PASSPHRASE }}
           telegram_token: ${{ secrets.TOKEN_BOT }}
           telegram_chat_id: ${{ secrets.CHAT_ID }}
+          
+          # Parâmetros relacionados ao repositório
           repo_host: ${{ secrets.PKGBUILD_HOST }}
           repo_user: ${{ secrets.PKGBUILD_USER }}
           repo_port: ${{ secrets.PKGBUILD_PORT }}
           repo_dir: ${{ secrets.PKGBUILD_DIR }}
-          url: ${{ env.url }}
-          git_branch: ${{ env.git_branch }}
-          manjaro_branch: ${{ env.manjaro_branch }}
+          
+          # Opções de publicação e atualização
           publish_github: ${{ github.event.inputs.publish_github || 'true' }}
           push_to_repo: ${{ github.event.inputs.push_to_repo || 'true' }}
           update_db: ${{ github.event.inputs.update_db || 'true' }}
+          
+          # Outros parâmetros específicos
           extra_command: ${{ github.event.inputs.extra_command }}
-          repo: ${{ github.repository }}

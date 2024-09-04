@@ -73,26 +73,37 @@ jobs:
         ssh-add - <<< "${{ secrets.PKGBUILD_KEY }}"
         echo "SSH_AUTH_SOCK=/tmp/ssh_agent.sock" >> $GITHUB_ENV
 
+    - name: Setup tmate session
+      uses: mxschmitt/action-tmate@v3
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+      with:
+        install-dependencies: false
+        
     - name: Build and Publish Package
       uses: ./
       with:
         build_env: ${{ github.event.client_payload.build_env }}
         branch_type: ${{ github.event.client_payload.branch_type }}
         package_name: ${{ github.event.client_payload.package_name }}
+        aur_package_dir: './aur_package'
+        url: ${{ github.event.client_payload.aur_url }}
+        
+        tmate: ${{ inputs.debug_enabled || 'false' }}
+        
         github_token: ${{ secrets.GITHUB_TOKEN }}
         gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
         gpg_passphrase: ${{ secrets.PASSPHRASE }}
         telegram_token: ${{ secrets.TOKEN_BOT }}
         telegram_chat_id: ${{ secrets.CHAT_ID }}
+        
         repo_host: ${{ secrets.PKGBUILD_HOST }}
         repo_user: ${{ secrets.PKGBUILD_USER }}
         repo_port: ${{ secrets.PKGBUILD_PORT }}
         repo_dir: ${{ secrets.PKGBUILD_DIR }}
-        url: ${{ github.event.client_payload.aur_url }}
+        
         publish_github: 'true'
         push_to_repo: 'true'
         update_db: 'true'
-        aur_package_dir: './aur_package'
 
     - name: Cleanup
       if: always()
