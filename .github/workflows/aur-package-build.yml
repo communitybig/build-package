@@ -61,6 +61,8 @@ jobs:
         echo "AUR URL: ${{ env.AUR_URL }}"
         echo "Branch Type: ${{ env.BRANCH_TYPE }}"
         echo "Build Env: ${{ env.BUILD_ENV }}"
+        echo "Debug enabled: ${{ inputs.debug_enabled }}"
+        echo "Tmate input: ${{ inputs.tmate }}"
 
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -72,12 +74,6 @@ jobs:
         ssh-agent -a $SSH_AUTH_SOCK > /dev/null
         ssh-add - <<< "${{ secrets.PKGBUILD_KEY }}"
         echo "SSH_AUTH_SOCK=/tmp/ssh_agent.sock" >> $GITHUB_ENV
-
-    - name: Setup tmate session
-      uses: mxschmitt/action-tmate@v3
-      if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
-      with:
-        install-dependencies: false
         
     - name: Build and Publish Package
       uses: ./
