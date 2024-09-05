@@ -42,10 +42,6 @@ inputs:
   tmate:
     description: 'Run tmate for debugging'
     required: false
-  debug_enabled:
-    description: 'Enable debug mode with tmate'
-    required: false
-    default: 'false'
   repo_mirror:
     description: 'Mirror to use in build'
     default: repo
@@ -118,6 +114,7 @@ runs:
         echo "${{ toJson(inputs) }}"
         echo "DEBUG: build_env from input: ${{ inputs.build_env }}"
         echo "DEBUG: build_env from env: $DEBUG_BUILD_ENV"
+        echo "DEBUG: tmate input: ${{ inputs.tmate }}"
         echo "DEBUG: All env variables"
         env | sort
   
@@ -247,7 +244,7 @@ runs:
     ### Setup tmate session for debugging if enabled
     - name: Setup TMATE Session
       uses: mxschmitt/action-tmate@v3
-      if: inputs.tmate == 'true' || inputs.debug_enabled == 'true'
+      if: inputs.tmate == 'true'
       with:
         install-dependencies: false
 

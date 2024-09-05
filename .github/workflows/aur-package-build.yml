@@ -13,7 +13,7 @@ on:
         description: 'URL do pacote AUR'
         required: true
         type: string
-      debug_enabled:
+      tmate:
         type: boolean
         description: 'With TMATE'
         required: false
@@ -61,8 +61,8 @@ jobs:
         echo "AUR URL: ${{ env.AUR_URL }}"
         echo "Branch Type: ${{ env.BRANCH_TYPE }}"
         echo "Build Env: ${{ env.BUILD_ENV }}"
-        echo "Debug enabled: ${{ inputs.debug_enabled }}"
-        echo "Tmate input: ${{ inputs.tmate }}"
+        echo "Tmate from payload: ${{ github.event.client_payload.tmate }}"
+        echo "Full github event: ${{ toJson(github.event) }}"
 
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -84,7 +84,7 @@ jobs:
         aur_package_dir: './aur_package'
         url: ${{ github.event.client_payload.aur_url }}
         
-        tmate: ${{ inputs.debug_enabled || 'false' }}
+        tmate: ${{ github.event.client_payload.tmate || 'false' }}
         
         github_token: ${{ secrets.GITHUB_TOKEN }}
         gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
