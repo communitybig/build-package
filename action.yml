@@ -285,23 +285,31 @@ runs:
           echo "Current AUR package directory: $(pwd)"
           echo "AUR package directory contents:"
           ls -la
-          
+
           # Give permissions to builduser for the current directory
           sudo chown -R builduser:builduser .
-          
-          # Use yay para construir o pacote AUR
-          echo "Building AUR package with yay: ${{ inputs.package_name }}"
-          echo "Synchronizing databases with yay"
-          sudo -u builduser yay -Sy --noconfirm
-          
-          echo "Building AUR package with yay: ${{ inputs.package_name }}"
-          sudo -u builduser yay -S --noconfirm --builddir=/home/sources --noprogressbar -b .
-          
-          echo "Yay build completed. Checking /home/sources:"
-          ls -la /home/sources
-          
+
+          # Criar diretório temporário para makepkg
+          sudo mkdir -p /tmp/makepkg
+          sudo chown builduser:builduser /tmp/makepkg
+
+          # Extrair dependências do PKGBUILD
+          depends=$(grep -E "^depends=\(" PKGBUILD | sed 's/depends=(//' | sed 's/)$//' | tr -d "'")
+          makedepends=$(grep -E "^makedepends=\(" PKGBUILD | sed 's/makedepends=(//' | sed 's/)$//' | tr -d "'")
+
+          # Instalar dependências
+          echo "Installing dependencies..."
+          sudo -u builduser yay -S --asdeps --nodeps $depends $makedepends --noconfirm
+
+          # Construir o pacote sem instalar
+          echo "Building AUR package: ${{ inputs.package_name }}"
+          sudo -u builduser makepkg -s --noconfirm --noprogressbar --nodeps
+
           # Mover o pacote compilado para /home/packages
-          sudo -u builduser bash -c "mv /home/sources/*.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'"
+          sudo -u builduser bash -c "mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'"
+
+          echo "Build completed. Checking /home/packages:"
+          ls -la /home/packages
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
@@ -328,12 +336,6 @@ runs:
         ls -la /home/packages
         echo "Contents of /home/sources:"
         ls -la /home/sources
-        
-        # Mostrar logs de erro, se existirem
-        if [ -f "/home/sources/yay.log" ]; then
-          echo "Yay log contents:"
-          cat "/home/sources/yay.log"
-        fi
 
   
     # Assina o pacote
