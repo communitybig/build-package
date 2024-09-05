@@ -587,11 +587,11 @@ runs:
         EOF
 
 
-    # Send a Telegram alert if the build fails
-    - name: Telegram Alert Fail
-      if: failure()
-      shell: bash
-      run: |
-        curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
-          -d chat_id="${{ inputs.telegram_chat_id }}" \
-          -d text="🚨 FALHA ao criar Pacote Community: ${{ github.event.action }} a partir do branch ${{ github.ref_name }}, link do erro: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} 🖥"
+    # # Send a Telegram alert if the build fails
+    # - name: Telegram Alert Fail
+    #   if: failure()
+    #   shell: bash
+    #   run: |
+    #     curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
+    #       -d chat_id="${{ inputs.telegram_chat_id }}" \
+    #       -d text="🚨 FALHA ao criar Pacote Community: ${{ github.event.action }} a partir do branch ${{ github.ref_name }}, link do erro: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} 🖥"
