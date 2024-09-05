@@ -375,30 +375,37 @@ runs:
     - name: Generate checksums
       shell: bash
       run: |
-        # Encontra o diretório que contém o PKGBUILD
-        gitfolder=$(find . -type f -name PKGBUILD | sed 's/PKGBUILD$//')
-        if [ -z "$gitfolder" ]; then
-          echo "PKGBUILD não encontrado. Usando diretório atual."
-          gitfolder="."
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          # Para pacotes AUR
+          cd /home/packages
+        else
+          # Para pacotes não-AUR
+          gitfolder=$(find . -type f -name PKGBUILD | sed 's/PKGBUILD$//')
+          if [ -z "$gitfolder" ]; then
+            echo "PKGBUILD não encontrado. Usando diretório atual."
+            gitfolder="."
+          fi
+          cd "$gitfolder"
         fi
-        cd "$gitfolder"
         
         # Gera checksums para pacotes e assinaturas
         for i in *.pkg.tar.zst; do
           if [ -f "$i" ]; then
             md5sum "$i" >> "$i.md5"
+            echo "Gerado MD5 para $i"
           fi
         done
         
         for i in *.sig; do
           if [ -f "$i" ]; then
             md5sum "$i" >> "${i%.sig}.md5"
+            echo "Gerado MD5 para $i"
           fi
         done
         
         # Lista os arquivos MD5 gerados
         echo "Arquivos MD5 gerados:"
-        ls -l *.md5
+        ls -l *.md5 || echo "Nenhum arquivo MD5 encontrado"
   
   
     # Publish the package on GitHub
@@ -406,27 +413,30 @@ runs:
       if: inputs.publish_github == 'true'
       shell: bash
       run: |
-        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-        cd $gitfolder
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          # Para pacotes AUR
+          cd /home/packages
+        else
+          # Para pacotes não-AUR
+          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          cd $gitfolder
+        fi
+        
         ls -lh
         
         # Skip linux-zen packages
-        if [ -n "$(grep linux-zen <<< $gitfolder)" ];then
+        if [ -n "$(grep linux-zen <<< $PWD)" ];then
           exit 0
         fi
         
-        # Determine the last committer
-        lastCommit=$(git log -1 --format="%an <%ae>")
-        if [ "$(grep github-actions <<< $lastCommit)" ];then
-          lastCommit=$(git log -2 --format="%an <%ae>")
-        fi
-        
         # Set up GitHub authentication and determine the repository
-        if [ -n "${{ inputs.url }}" ]; then
-          echo "${{ inputs.github_token }}" | gh auth login --with-token
+        echo "${{ inputs.github_token }}" | gh auth login --with-token
+        
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          repo="${{ inputs.repo }}"
+        elif [ -n "${{ inputs.url }}" ]; then
           repo=$(echo "${{ inputs.url }}" | sed 's|https://github.com/||')
         else
-          echo "${{ inputs.github_token }}" | gh auth login --with-token
           repo="${{ inputs.repo }}"
         fi
         
@@ -436,8 +446,7 @@ runs:
         fi
         
         # Create and upload the release
-        ls *.pkg* | head -n1 | sed 's/.pkg.*//' > release
-        release=$(cat release)
+        release=$(ls *.pkg.tar.zst | head -n1 | sed 's/.pkg.tar.zst//')
         
         echo "release=$release"
         echo "repo=$repo"
@@ -447,8 +456,8 @@ runs:
           echo "Using repository: $repo"
           echo "Creating release: $release"
           gh release create ${release} --title ${release} --repo ${repo} --notes "automated release from ${{ inputs.url }}" || echo "release already exists"
-          for i in .zst .sig .tar .md5; do
-            find -iname "*$i" -exec gh release upload ${release} --repo ${repo} --clobber {} \;
+          for i in pkg.tar.zst sig md5; do
+            find . -maxdepth 1 -type f -name "*.$i" -exec gh release upload ${release} --repo ${repo} --clobber {} +
           done
         else
           echo "Error: repo or release is empty"
@@ -468,25 +477,30 @@ runs:
         ssh-keyscan -t rsa -p ${{ inputs.repo_port }} ${{ inputs.repo_host }} >> /root/.ssh/known_hosts
         ip=${{ inputs.repo_host }}
         
-        # Find the PKGBUILD directory
-        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-        cd $gitfolder
-        ls -lh
-        
-        # Determine the last committer
-        lastCommit=$(git log -1 --format="%an <%ae>")
-        if [ "$(grep github-actions <<< $lastCommit)" ];then
-          lastCommit=$(git log -2 --format="%an <%ae>")
-        fi
-        
-        # Set the branch based on BRANCH_TYPE
-        if [ "${{ inputs.branch_type }}" == "stable" ]; then
-          branch="STABLE"
-        elif [ "${{ inputs.branch_type }}" == "aur" ]; then
-          branch="AUR"
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          # Para pacotes AUR
+          cd /home/packages
+          branch="TESTING"  # Todos os pacotes AUR vão para TESTING
         else
-          branch="TESTING"
+          # Para pacotes não-AUR
+          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          cd $gitfolder
+          
+          # Determine the last committer (apenas para pacotes não-AUR)
+          lastCommit=$(git log -1 --format="%an <%ae>")
+          if [ "$(grep github-actions <<< $lastCommit)" ];then
+            lastCommit=$(git log -2 --format="%an <%ae>")
+          fi
+          
+          # Set the branch based on BRANCH_TYPE
+          if [ "${{ inputs.branch_type }}" == "stable" ]; then
+            branch="STABLE"
+          else
+            branch="TESTING"
+          fi
         fi
+        
+        ls -lh
         
         # Function to send Telegram message
         send_telegram_message() {
@@ -498,7 +512,7 @@ runs:
         }
         
         # Upload the package files
-        for i in *.zst; do
+        for i in *.pkg.tar.zst; do
           pkgname=$(basename $i)
           
           pkgname_escaped=$(echo "$pkgname" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
@@ -533,15 +547,12 @@ runs:
         }
         
         # Determine the database name based on the branch type
-        if [ "${{ inputs.branch_type }}" == "testing" ]; then
-          branch="TESTING"
-          db_name="community-testing"
-        elif [ "${{ inputs.branch_type }}" == "stable" ]; then
+        if [ "${{ inputs.branch_type }}" == "stable" ]; then
           branch="STABLE"
           db_name="community-stable"
-        elif [ "${{ inputs.branch_type }}" == "aur" ]; then
-          branch="AUR"
-          db_name="community-aur"
+        elif [ "${{ inputs.branch_type }}" == "aur" ] || [ "${{ inputs.branch_type }}" == "testing" ]; then
+          branch="TESTING"
+          db_name="community-testing"
         else
           echo "Error: Unknown branch type: ${{ inputs.branch_type }}"
           exit 1
@@ -587,11 +598,24 @@ runs:
         EOF
 
 
-    # # Send a Telegram alert if the build fails
-    # - name: Telegram Alert Fail
-    #   if: failure()
-    #   shell: bash
-    #   run: |
-    #     curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
-    #       -d chat_id="${{ inputs.telegram_chat_id }}" \
-    #       -d text="🚨 FALHA ao criar Pacote Community: ${{ github.event.action }} a partir do branch ${{ github.ref_name }}, link do erro: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} 🖥"
+    # Check Build Status
+    - name: Check Build Status
+      id: check_status
+      if: always()
+      run: |
+        if [ ${{ job.status }} == 'success' ]; then
+          echo "build_status=success" >> $GITHUB_OUTPUT
+        else
+          echo "build_status=failure" >> $GITHUB_OUTPUT
+        fi
+
+    # Send a Telegram alert if the build fails
+    - name: Telegram Alert Fail
+      if: failure()
+      shell: bash
+      run: |
+        if [ "${{ steps.check_status.outputs.build_status }}" == "failure" ]; then
+          curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
+            -d chat_id="${{ inputs.telegram_chat_id }}" \
+            -d text="🚨 FALHA ao criar Pacote: ${{ github.event.action }} a partir do branch ${{ github.ref_name }}, link do erro: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} 🖥"
+        fi
