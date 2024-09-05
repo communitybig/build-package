@@ -410,33 +410,30 @@ runs:
   
     # Publish the package on GitHub
     - name: Publish Package on GitHub
-      if: inputs.publish_github == 'true'
+      if: inputs.publish_github == 'true' && inputs.build_env != 'aur'
       shell: bash
       run: |
-        if [ "${{ inputs.build_env }}" == "aur" ]; then
-          # Para pacotes AUR
-          cd /home/packages
-        else
-          # Para pacotes não-AUR
-          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-          cd $gitfolder
-        fi
-        
+        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+        cd $gitfolder
         ls -lh
         
         # Skip linux-zen packages
-        if [ -n "$(grep linux-zen <<< $PWD)" ];then
+        if [ -n "$(grep linux-zen <<< $gitfolder)" ];then
           exit 0
         fi
         
-        # Set up GitHub authentication and determine the repository
-        echo "${{ inputs.github_token }}" | gh auth login --with-token
+        # Determine the last committer
+        lastCommit=$(git log -1 --format="%an <%ae>")
+        if [ "$(grep github-actions <<< $lastCommit)" ];then
+          lastCommit=$(git log -2 --format="%an <%ae>")
+        fi
         
-        if [ "${{ inputs.build_env }}" == "aur" ]; then
-          repo="${{ inputs.repo }}"
-        elif [ -n "${{ inputs.url }}" ]; then
+        # Set up GitHub authentication and determine the repository
+        if [ -n "${{ inputs.url }}" ]; then
+          echo "${{ inputs.github_token }}" | gh auth login --with-token
           repo=$(echo "${{ inputs.url }}" | sed 's|https://github.com/||')
         else
+          echo "${{ inputs.github_token }}" | gh auth login --with-token
           repo="${{ inputs.repo }}"
         fi
         
@@ -446,7 +443,8 @@ runs:
         fi
         
         # Create and upload the release
-        release=$(ls *.pkg.tar.zst | head -n1 | sed 's/.pkg.tar.zst//')
+        ls *.pkg* | head -n1 | sed 's/.pkg.*//' > release
+        release=$(cat release)
         
         echo "release=$release"
         echo "repo=$repo"
@@ -456,8 +454,8 @@ runs:
           echo "Using repository: $repo"
           echo "Creating release: $release"
           gh release create ${release} --title ${release} --repo ${repo} --notes "automated release from ${{ inputs.url }}" || echo "release already exists"
-          for i in pkg.tar.zst sig md5; do
-            find . -maxdepth 1 -type f -name "*.$i" -exec gh release upload ${release} --repo ${repo} --clobber {} +
+          for i in .zst .sig .tar .md5; do
+            find -iname "*$i" -exec gh release upload ${release} --repo ${repo} --clobber {} \;
           done
         else
           echo "Error: repo or release is empty"
