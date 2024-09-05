@@ -345,23 +345,30 @@ runs:
         # Importa a chave GPG
         echo "${{ inputs.gpg_key }}" | gpg --batch --import &>/dev/null
         
-        # Encontra o diretório que contém o PKGBUILD
-        gitfolder=$(find . -type f -name PKGBUILD | sed 's/PKGBUILD$//')
-        if [ -z "$gitfolder" ]; then
-          echo "PKGBUILD não encontrado. Usando diretório atual."
-          gitfolder="."
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          # Para pacotes AUR
+          cd /home/packages
+        else
+          # Para pacotes não-AUR
+          gitfolder=$(find . -type f -name PKGBUILD | sed 's/PKGBUILD$//')
+          if [ -z "$gitfolder" ]; then
+            echo "PKGBUILD não encontrado. Usando diretório atual."
+            gitfolder="."
+          fi
+          cd "$gitfolder"
         fi
-        cd "$gitfolder"
         
         # Assina todos os pacotes encontrados
         for p in $(find $PWD -maxdepth 1 -regex '.*\.pkg\.tar\.\(xz\|zst\)'); do
-          echo "Assinando pacote: $p"
-          gpg --pinentry-mode loopback --passphrase "${{ inputs.gpg_passphrase }}" --detach-sign "${p}"
+          if [ -f "$p" ]; then
+            echo "Assinando pacote: $p"
+            gpg --pinentry-mode loopback --passphrase "${{ inputs.gpg_passphrase }}" --detach-sign "${p}"
+          fi
         done
         
         # Lista os arquivos .sig gerados
         echo "Arquivos de assinatura gerados:"
-        ls -l *.sig
+        ls -l *.sig || echo "Nenhum arquivo .sig encontrado"
 
   
     # Gera checksums para os pacotes
