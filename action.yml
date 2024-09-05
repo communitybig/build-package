@@ -602,6 +602,7 @@ runs:
     - name: Check Build Status
       id: check_status
       if: always()
+      shell: bash 
       run: |
         if [ ${{ job.status }} == 'success' ]; then
           echo "build_status=success" >> $GITHUB_OUTPUT
