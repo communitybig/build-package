@@ -625,18 +625,24 @@ runs:
           paccache -rk1
           
           # Remova todos os pacotes que não estão no banco de dados
-          repo-remove $db_name.db.tar.gz \$(comm -23 <(ls *.pkg.tar.zst | sort) <(tar -tf $db_name.db.tar.gz | grep -v '/$' | sed 's|-[^-]*-[^-]*$||' | sort -u))
+          for pkg in *.pkg.tar.zst; do
+            if ! tar -tf $db_name.db.tar.gz | grep -q "\${pkg%.pkg.tar.zst}"; then
+              echo "Removing package not in database: \$pkg"
+              rm -f "\$pkg" "\${pkg}.sig" "\${pkg}.md5"
+            fi
+          done
           
           # Remova os arquivos .md5 e .sig órfãos
-          find . -name "*.md5" -or -name "*.sig" | while read file; do
-            pkg_name=\$(basename "\$file" | sed 's/\.[^.]*$//')
-            if [ ! -f "\${pkg_name}.pkg.tar.zst" ]; then
-              rm "\$file"
+          for file in *.sig *.md5; do
+            base_name=\${file%.*}
+            if [ ! -f "\${base_name}.pkg.tar.zst" ]; then
+              echo "Removing orphaned file: \$file"
+              rm -f "\$file"
             fi
           done
           
           exit_code=\$?
-          echo "Comando paccache concluído com código de saída: \$exit_code"
+          echo "Limpeza concluída com código de saída: \$exit_code"
           exit \$exit_code
         EOF
 
