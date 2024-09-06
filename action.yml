@@ -625,12 +625,12 @@ runs:
           set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
           
-          # Mantenha apenas a versão mais recente de cada pacote
-          paccache -rk1
+          # Criar uma lista de pacotes no banco de dados
+          db_packages=\$(tar -xOf $db_name.db.tar.gz | sed -n '/^%FILENAME%$/,/^%/p' | grep -v '^%')
           
-          # Remova todos os pacotes que não estão no banco de dados
+          # Remova pacotes que não estão no banco de dados
           for pkg in *.pkg.tar.zst; do
-            if ! tar -tf $db_name.db.tar.gz | grep -q "\${pkg%.pkg.tar.zst}"; then
+            if ! echo "\$db_packages" | grep -q "^\$pkg\$"; then
               echo "Removing package not in database: \$pkg"
               rm -f "\$pkg" "\${pkg}.sig" "\${pkg}.md5"
             fi
@@ -639,11 +639,14 @@ runs:
           # Remova os arquivos .md5 e .sig órfãos
           for file in *.sig *.md5; do
             base_name=\${file%.*}
-            if [ ! -f "\${base_name}.pkg.tar.zst" ]; then
+            if [ ! -f "\${base_name}" ] && ! echo "\$db_packages" | grep -q "^\${base_name}\$"; then
               echo "Removing orphaned file: \$file"
               rm -f "\$file"
             fi
           done
+          
+          # Mantenha apenas a versão mais recente de cada pacote no banco de dados
+          paccache -rk1 -c ${{ inputs.repo_dir }}/${branch,,}/x86_64
           
           exit_code=\$?
           echo "Limpeza concluída com código de saída: \$exit_code"
