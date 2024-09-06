@@ -625,28 +625,31 @@ runs:
           set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
           
-          # Criar uma lista de pacotes no banco de dados
-          db_packages=\$(tar -xOf $db_name.db.tar.gz | sed -n '/^%FILENAME%$/,/^%/p' | grep -v '^%')
-          
-          # Remova pacotes que não estão no banco de dados
-          for pkg in *.pkg.tar.zst; do
-            if ! echo "\$db_packages" | grep -q "^\$pkg\$"; then
-              echo "Removing package not in database: \$pkg"
-              rm -f "\$pkg" "\${pkg}.sig" "\${pkg}.md5"
-            fi
+          # Manter apenas a versão mais recente de cada pacote
+          for pkg in $(ls *.pkg.tar.zst | cut -d- -f1 | sort -u); do
+            newest=\$(ls \${pkg}-*.pkg.tar.zst | sort -V | tail -n1)
+            for old in \${pkg}-*.pkg.tar.zst; do
+              if [ "\$old" != "\$newest" ]; then
+                echo "Removing old package: \$old"
+                rm -f "\$old" "\${old}.sig" "\${old}.md5"
+              fi
+            done
           done
-          
-          # Remova os arquivos .md5 e .sig órfãos
+
+          # Remover os bancos de dados existentes
+          rm -f $db_name.db.tar.gz $db_name.files.tar.gz
+
+          # Recriar o banco de dados com os pacotes presentes
+          repo-add $db_name.db.tar.gz *.pkg.tar.zst
+
+          # Remover arquivos .sig e .md5 órfãos
           for file in *.sig *.md5; do
             base_name=\${file%.*}
-            if [ ! -f "\${base_name}" ] && ! echo "\$db_packages" | grep -q "^\${base_name}\$"; then
+            if [ ! -f "\${base_name}" ]; then
               echo "Removing orphaned file: \$file"
               rm -f "\$file"
             fi
           done
-          
-          # Mantenha apenas a versão mais recente de cada pacote no banco de dados
-          paccache -rk1 -c ${{ inputs.repo_dir }}/${branch,,}/x86_64
           
           exit_code=\$?
           echo "Limpeza concluída com código de saída: \$exit_code"
