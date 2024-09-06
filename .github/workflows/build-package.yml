@@ -1,4 +1,4 @@
-name: Build Package
+name: 📦 Build Package
 
 on:
   repository_dispatch:
