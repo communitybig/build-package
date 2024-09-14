@@ -3,7 +3,7 @@ description: 'Builds Manjaro/Community Packages'
 
 inputs:
   build_env:
-    description: 'Build environment (testing, stable, or aur)'
+    description: 'Build environment (testing, extra, stable, or aur)'
     required: true
     default: 'testing'
   source:
@@ -87,7 +87,7 @@ inputs:
     description: 'Telegram chat ID for notifications'
     required: false
   branch_type:
-    description: 'Branch type (testing, stable, or aur)'
+    description: 'Branch type (testing, extra, stable, or aur)'
     required: true
   url:
     description: 'URL do repositório'
@@ -172,6 +172,11 @@ runs:
           [biglinux-stable]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+        elif [ "${{ inputs.build_env }}" == "extra" ] || [ "$BRANCH_TYPE" == "extra" ]; then
+          echo '
+          [community-extra]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/extra/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
         elif [ "${{ inputs.build_env }}" == "stable" ] || [ "$BRANCH_TYPE" == "stable" ]; then
           echo '
           [community-stable]
@@ -497,6 +502,8 @@ runs:
           # Set the branch based on BRANCH_TYPE
           if [ "${{ inputs.branch_type }}" == "stable" ]; then
             branch="STABLE"
+          elif [ "${{ inputs.branch_type }}" == "extra" ]; then
+            branch="EXTRA"
           else
             branch="TESTING"
           fi
@@ -552,6 +559,9 @@ runs:
         if [ "${{ inputs.branch_type }}" == "stable" ]; then
           branch="STABLE"
           db_name="community-stable"
+        elif [ "${{ inputs.branch_type }}" == "extra" ]; then
+          branch="EXTRA"
+          db_name="community-extra"
         elif [ "${{ inputs.branch_type }}" == "aur" ] || [ "${{ inputs.branch_type }}" == "testing" ]; then
           branch="TESTING"
           db_name="community-testing"
@@ -605,6 +615,9 @@ runs:
         if [ "${{ inputs.branch_type }}" == "stable" ]; then
           branch="STABLE"
           db_name="community-stable"
+        elif [ "${{ inputs.branch_type }}" == "extra" ]; then
+          branch="EXTRA"
+          db_name="community-extra"
         elif [ "${{ inputs.branch_type }}" == "aur" ] || [ "${{ inputs.branch_type }}" == "testing" ]; then
           branch="TESTING"
           db_name="community-testing"
