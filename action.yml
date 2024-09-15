@@ -50,9 +50,8 @@ inputs:
     description: 'Development repository'
     required: false
   pacman_mirror:
-    description: 'Pacman mirror URL'
+    description: 'Optional: Specific mirror to override automatic selection'
     required: false
-    default: 'https://nnenix.mm.fcix.net/manjaro/stable/$repo/$arch'
   publish_github:
     description: 'Publish package on GitHub'
     required: false
@@ -133,6 +132,7 @@ runs:
           curl \
           gnupg \
           openssl \
+          pacman-mirrors \
           zip \
           meson \
           ninja \
@@ -141,6 +141,20 @@ runs:
         # Verifica as versões instaladas
         meson --version
         ninja --version
+  
+  
+    - name: Generate and configure mirrorlist
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.pacman_mirror }}" ]; then
+          echo "Usando mirror especificado: ${{ inputs.pacman_mirror }}"
+          echo "Server = ${{ inputs.pacman_mirror }}" | sudo tee /etc/pacman.d/mirrorlist
+        else
+          echo "Gerando mirrorlist usando pacman-mirrors"
+          sudo pacman-mirrors --geoip
+        fi
+        echo "Mirrorlist final:"
+        cat /etc/pacman.d/mirrorlist
   
   
     - name: Configure System and Repositories
@@ -153,7 +167,12 @@ runs:
         echo "DEBUG: BRANCH_TYPE: $BRANCH_TYPE"
         
         # Set up pacman mirror
-        echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
+        if [ -n "${{ inputs.pacman_mirror }}" ]; then
+          echo "Usando mirror especificado: ${{ inputs.pacman_mirror }}"
+          echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
+        else
+          echo "Usando mirrorlist gerada pelo pacman-mirrors"
+        fi
         
         # Remove existing BigLinux repositories
         sudo sed -i '/biglinux/,$d' /etc/pacman.conf
