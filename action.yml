@@ -122,8 +122,7 @@ runs:
       shell: bash
       run: |
         # Atualiza o sistema e instala as dependências necessárias
-        sudo pacman -Syu --noconfirm
-        sudo pacman -S --needed --noconfirm \
+        sudo pacman -Syu --quiet --needed --noconfirm \
           base-devel \
           cmake \
           fakeroot \
@@ -151,7 +150,7 @@ runs:
           echo "Server = ${{ inputs.pacman_mirror }}" | sudo tee /etc/pacman.d/mirrorlist
         else
           echo "Gerando mirrorlist usando pacman-mirrors"
-          sudo pacman-mirrors --geoip
+          sudo pacman-mirrors --fasttrack 3
         fi
         echo "Mirrorlist final:"
         cat /etc/pacman.d/mirrorlist
