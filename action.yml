@@ -150,7 +150,7 @@ runs:
           echo "Server = ${{ inputs.pacman_mirror }}" | sudo tee /etc/pacman.d/mirrorlist
         else
           echo "Gerando mirrorlist usando pacman-mirrors e excluindo mirrors problemáticos"
-          sudo pacman-mirrors --geoip --api --protocols https --country all
+          sudo pacman-mirrors --geoip
           sudo sed -i '/nnenix\.mm\.fcix\.net/d' /etc/pacman.d/mirrorlist
         fi
         echo "Sincronizando bancos de dados do pacman..."
