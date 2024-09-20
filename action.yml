@@ -138,18 +138,92 @@ runs:
     - name: Generate and configure mirrorlist
       shell: bash
       run: |
+        mirrors=(
+          "https://irltoolkit.mm.fcix.net/manjaro"
+          "https://mirror.fcix.net/manjaro"
+          "https://opencolo.mm.fcix.net/manjaro"
+          "https://mirrors.ocf.berkeley.edu/manjaro"
+          "https://ridgewireless.mm.fcix.net/manjaro"
+          "https://codingflyboy.mm.fcix.net/manjaro"
+          "https://mirrors.sonic.net/manjaro"
+          "https://repo.ialab.dsu.edu/manjaro"
+          "https://volico.mm.fcix.net/manjaro"
+          "https://forksystems.mm.fcix.net/manjaro"
+          "https://mnvoip.mm.fcix.net/manjaro"
+          "https://coresite.mm.fcix.net/manjaro"
+          "https://uvermont.mm.fcix.net/manjaro"
+          "https://ohioix.mm.fcix.net/manjaro"
+          "https://southfront.mm.fcix.net/manjaro"
+          "https://mirror.math.princeton.edu/manjaro"
+          "https://nocix.mm.fcix.net/manjaro"
+          "https://mirrors.gigenet.com/manjaro"
+          "https://ask4.mm.fcix.net/manjaro"
+        )
+
+        repos=("core" "extra" "community" "multilib")
+        branches=("stable" "testing" "unstable")
+
+        test_mirror() {
+          local mirror=$1
+          for branch in "${branches[@]}"; do
+            for repo in "${repos[@]}"; do
+              url="${mirror}/${branch}/${repo}/x86_64/${repo}.db"
+              if ! curl --output /dev/null --silent --head --fail "$url"; then
+                return 1
+              fi
+            done
+          done
+          return 0
+        }
+
+        configure_mirror() {
+          local mirror=$1
+          echo "Server = ${mirror}/\$repo/\$arch" | sudo tee /etc/pacman.d/mirrorlist
+          echo "Mirrorlist configurada com: ${mirror}"
+          cat /etc/pacman.d/mirrorlist
+        }
+
         if [ -n "${{ inputs.pacman_mirror }}" ]; then
-          echo "Usando mirror especificado: ${{ inputs.pacman_mirror }}"
-          echo "Server = ${{ inputs.pacman_mirror }}" | sudo tee /etc/pacman.d/mirrorlist
-        else
-          echo "Gerando mirrorlist usando pacman-mirrors e excluindo mirrors problemáticos"
+          echo "Testando mirror especificado: ${{ inputs.pacman_mirror }}"
+          if test_mirror "${{ inputs.pacman_mirror }}"; then
+            configure_mirror "${{ inputs.pacman_mirror }}"
+          else
+            echo "Mirror especificado não está funcionando. Testando alternativas."
+          fi
+        fi
+
+        if [ ! -s /etc/pacman.d/mirrorlist ]; then
+          echo "Testando mirrors alternativos..."
+          for mirror in "${mirrors[@]}"; do
+            if test_mirror "$mirror"; then
+              configure_mirror "$mirror"
+              break
+            fi
+          done
+        fi
+
+        if [ ! -s /etc/pacman.d/mirrorlist ]; then
+          echo "Nenhum mirror funcional encontrado. Usando pacman-mirrors como fallback."
           sudo pacman-mirrors --geoip
           sudo sed -i '/nnenix\.mm\.fcix\.net/d' /etc/pacman.d/mirrorlist
         fi
+
         echo "Sincronizando bancos de dados do pacman..."
-        sudo pacman -Syy
+        if ! sudo pacman -Syy; then
+          echo "Falha na sincronização dos bancos de dados. Verifique a conexão de rede e os mirrors."
+          exit 1
+        fi
+
         echo "Mirrorlist final:"
         cat /etc/pacman.d/mirrorlist
+
+        # Teste final para garantir que o chrootbuild funcionará
+        if ! sudo pacman -Sy base-devel --noconfirm; then
+          echo "Falha ao instalar base-devel. O chrootbuild pode falhar."
+          exit 1
+        fi
+
+        echo "Configuração de mirror concluída com sucesso."
   
   
     - name: Configure System and Repositories
