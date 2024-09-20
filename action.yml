@@ -417,7 +417,16 @@ runs:
           
           # Build for x86_64
           echo -e "\033[01;31mBuild x86_64\033[0m"
-          sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ inputs.branch_type }}"
+          # Determinar o branch de build
+          if [ "${{ inputs.build_env }}" == "extra" ]; then
+            build_branch="testing"
+            echo "Ambiente de build é 'extra', usando branch 'testing' para chrootbuild"
+          else
+            build_branch="${{ inputs.branch_type }}"
+          fi
+          
+          # Executar chrootbuild com o branch determinado
+          sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${build_branch}"
         fi
         
         # Executa comando extra, se fornecido
