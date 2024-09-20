@@ -86,7 +86,7 @@ inputs:
     description: 'Telegram chat ID for notifications'
     required: false
   branch_type:
-    description: 'Branch type (testing, extra, stable, or aur)'
+    description: 'Branch type (testing or stable)'
     required: true
   url:
     description: 'URL do repositório'
@@ -135,97 +135,6 @@ runs:
         ninja --version
   
   
-    - name: Generate and configure mirrorlist
-      shell: bash
-      run: |
-        mirrors=(
-          "https://irltoolkit.mm.fcix.net/manjaro"
-          "https://mirror.fcix.net/manjaro"
-          "https://opencolo.mm.fcix.net/manjaro"
-          "https://mirrors.ocf.berkeley.edu/manjaro"
-          "https://ridgewireless.mm.fcix.net/manjaro"
-          "https://codingflyboy.mm.fcix.net/manjaro"
-          "https://mirrors.sonic.net/manjaro"
-          "https://repo.ialab.dsu.edu/manjaro"
-          "https://volico.mm.fcix.net/manjaro"
-          "https://forksystems.mm.fcix.net/manjaro"
-          "https://mnvoip.mm.fcix.net/manjaro"
-          "https://coresite.mm.fcix.net/manjaro"
-          "https://uvermont.mm.fcix.net/manjaro"
-          "https://ohioix.mm.fcix.net/manjaro"
-          "https://southfront.mm.fcix.net/manjaro"
-          "https://mirror.math.princeton.edu/manjaro"
-          "https://nocix.mm.fcix.net/manjaro"
-          "https://mirrors.gigenet.com/manjaro"
-          "https://ask4.mm.fcix.net/manjaro"
-        )
-
-        repos=("core" "extra" "community" "multilib")
-        branches=("stable" "testing" "unstable")
-
-        test_mirror() {
-          local mirror=$1
-          for branch in "${branches[@]}"; do
-            for repo in "${repos[@]}"; do
-              url="${mirror}/${branch}/${repo}/x86_64/${repo}.db"
-              if ! curl --output /dev/null --silent --head --fail "$url"; then
-                return 1
-              fi
-            done
-          done
-          return 0
-        }
-
-        configure_mirror() {
-          local mirror=$1
-          echo "Server = ${mirror}/\$repo/\$arch" | sudo tee /etc/pacman.d/mirrorlist
-          echo "Mirrorlist configurada com: ${mirror}"
-          cat /etc/pacman.d/mirrorlist
-        }
-
-        if [ -n "${{ inputs.pacman_mirror }}" ]; then
-          echo "Testando mirror especificado: ${{ inputs.pacman_mirror }}"
-          if test_mirror "${{ inputs.pacman_mirror }}"; then
-            configure_mirror "${{ inputs.pacman_mirror }}"
-          else
-            echo "Mirror especificado não está funcionando. Testando alternativas."
-          fi
-        fi
-
-        if [ ! -s /etc/pacman.d/mirrorlist ]; then
-          echo "Testando mirrors alternativos..."
-          for mirror in "${mirrors[@]}"; do
-            if test_mirror "$mirror"; then
-              configure_mirror "$mirror"
-              break
-            fi
-          done
-        fi
-
-        if [ ! -s /etc/pacman.d/mirrorlist ]; then
-          echo "Nenhum mirror funcional encontrado. Usando pacman-mirrors como fallback."
-          sudo pacman-mirrors --geoip
-          sudo sed -i '/nnenix\.mm\.fcix\.net/d' /etc/pacman.d/mirrorlist
-        fi
-
-        echo "Sincronizando bancos de dados do pacman..."
-        if ! sudo pacman -Syy; then
-          echo "Falha na sincronização dos bancos de dados. Verifique a conexão de rede e os mirrors."
-          exit 1
-        fi
-
-        echo "Mirrorlist final:"
-        cat /etc/pacman.d/mirrorlist
-
-        # Teste final para garantir que o chrootbuild funcionará
-        if ! sudo pacman -Sy base-devel --noconfirm; then
-          echo "Falha ao instalar base-devel. O chrootbuild pode falhar."
-          exit 1
-        fi
-
-        echo "Configuração de mirror concluída com sucesso."
-  
-  
     - name: Configure System and Repositories
       shell: bash
       run: |
@@ -236,12 +145,8 @@ runs:
         echo "DEBUG: BRANCH_TYPE: $BRANCH_TYPE"
         
         # Set up pacman mirror
-        if [ -n "${{ inputs.pacman_mirror }}" ]; then
           echo "Usando mirror especificado: ${{ inputs.pacman_mirror }}"
           echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
-        else
-          echo "Usando mirrorlist gerada pelo pacman-mirrors"
-        fi
         
         # Remove existing BigLinux repositories
         sudo sed -i '/biglinux/,$d' /etc/pacman.conf
@@ -299,7 +204,7 @@ runs:
         sudo sed -i '/MAKEFLAGS=/s/.*/MAKEFLAGS="-j'$(nproc)'"/' /etc/makepkg.conf
         
         # Modify manjaro-chrootbuild
-        #sudo sed -i 's|https://repo.manjaro.org/repo|https://nnenix.mm.fcix.net/manjaro|' /usr/lib/manjaro-chrootbuild/util.sh
+        sudo sed -i 's|https://repo.manjaro.org/repo|https://nnenix.mm.fcix.net/manjaro|' /usr/lib/manjaro-chrootbuild/util.sh
         sudo sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
 
   
@@ -365,12 +270,6 @@ runs:
         echo "Directory contents:"
         ls -la
         
-        # Create build user
-        useradd builduser -m
-        passwd -d builduser
-        #printf 'builduser ALL=(ALL) ALL\n' | sudo tee -a /etc/sudoers
-        echo "builduser ALL=(ALL) NOPASSWD: ALL" | sudo tee -a /etc/sudoers
-        
         # Create and set permissions for $PKGDEST and $SRCDEST
         sudo mkdir -p /home/packages /home/sources
         sudo chown builduser:builduser /home/packages /home/sources
@@ -396,14 +295,14 @@ runs:
 
           # Instalar dependências
           echo "Installing dependencies..."
-          sudo -u builduser yay -Sy --asdeps --nodeps $depends $makedepends --noconfirm
+          sudo yay -Sy --asdeps --nodeps $depends $makedepends --noconfirm
 
           # Construir o pacote sem instalar
           echo "Building AUR package: ${{ inputs.package_name }}"
-          sudo -u builduser makepkg -s --noconfirm --noprogressbar --nodeps
+          makepkg -s --noconfirm --noprogressbar --nodeps
 
           # Mover o pacote compilado para /home/packages
-          sudo -u builduser bash -c "mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'"
+          mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
 
           echo "Build completed. Checking /home/packages:"
           ls -la /home/packages
@@ -426,7 +325,7 @@ runs:
           fi
           
           # Executar chrootbuild com o branch determinado
-          sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${build_branch}"
+          sudo chrootbuild -H -p . -b ${build_branch}
         fi
         
         # Executa comando extra, se fornecido
