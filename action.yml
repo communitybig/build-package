@@ -296,7 +296,7 @@ runs:
 
           # Instalar dependências
           echo "Installing dependencies..."
-          sudo yay -Sy --asdeps --nodeps $depends $makedepends --noconfirm
+          sudo -u builduser yay -Sy --asdeps --nodeps $depends $makedepends --noconfirm
 
           # Construir o pacote sem instalar
           echo "Building AUR package: ${{ inputs.package_name }}"
