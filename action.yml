@@ -300,7 +300,7 @@ runs:
 
           # Construir o pacote sem instalar
           echo "Building AUR package: ${{ inputs.package_name }}"
-          makepkg -s --noconfirm --noprogressbar --nodeps
+          sudo -u builduser makepkg -s --noconfirm --noprogressbar --nodeps
 
           # Mover o pacote compilado para /home/packages
           mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
