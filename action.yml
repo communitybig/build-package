@@ -485,7 +485,7 @@ runs:
         if [ "${{ inputs.build_env }}" == "aur" ]; then
           # Para pacotes AUR
           cd /home/packages
-          branch="TESTING"  # Todos os pacotes AUR vão para TESTING
+          branch="EXTRA"  # Todos os pacotes AUR vão para EXTRA
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
@@ -557,10 +557,10 @@ runs:
         if [ "${{ inputs.branch_type }}" == "stable" ]; then
           branch="STABLE"
           db_name="community-stable"
-        elif [ "${{ inputs.branch_type }}" == "extra" ]; then
+        elif [ "${{ inputs.branch_type }}" == "extra" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
           branch="EXTRA"
           db_name="community-extra"
-        elif [ "${{ inputs.branch_type }}" == "aur" ] || [ "${{ inputs.branch_type }}" == "testing" ]; then
+        elif [ "${{ inputs.branch_type }}" == "testing" ]; then
           branch="TESTING"
           db_name="community-testing"
         else
@@ -613,10 +613,10 @@ runs:
         if [ "${{ inputs.branch_type }}" == "stable" ]; then
           branch="STABLE"
           db_name="community-stable"
-        elif [ "${{ inputs.branch_type }}" == "extra" ]; then
+        elif [ "${{ inputs.branch_type }}" == "extra" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
           branch="EXTRA"
           db_name="community-extra"
-        elif [ "${{ inputs.branch_type }}" == "aur" ] || [ "${{ inputs.branch_type }}" == "testing" ]; then
+        elif [ "${{ inputs.branch_type }}" == "testing" ]; then
           branch="TESTING"
           db_name="community-testing"
         else
