@@ -296,7 +296,8 @@ runs:
 
           # Instalar dependências
           echo "Installing dependencies..."
-          sudo -u builduser yay -Sy --asdeps --nodeps $depends $makedepends --noconfirm
+          export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
+          sudo -u builduser yay -Sy --asdeps --nodeps --noanswerdiff $depends $makedepends --noconfirm
 
           # Construir o pacote sem instalar
           echo "Building AUR package: ${{ inputs.package_name }}"
