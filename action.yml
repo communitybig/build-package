@@ -159,6 +159,10 @@ runs:
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/testing/$arch
           
+          [community-stable]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/stable/$arch
+          
           [biglinux-testing]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/testing/$arch
@@ -296,12 +300,12 @@ runs:
 
           # Instalar dependências
           echo "Installing dependencies..."
-          export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
+          #export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
           sudo -u builduser yay -Sy --asdeps --nodeps --noanswerdiff $depends $makedepends --noconfirm
 
           # Construir o pacote sem instalar
           echo "Building AUR package: ${{ inputs.package_name }}"
-          sudo -u builduser makepkg -s --noconfirm --noprogressbar --nodeps
+          makepkg -s --noconfirm --noprogressbar --nodeps
 
           # Mover o pacote compilado para /home/packages
           mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
