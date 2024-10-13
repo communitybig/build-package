@@ -163,6 +163,10 @@ runs:
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/stable/$arch
           
+          [community-extra]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/extra/$arch
+          
           [biglinux-testing]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/testing/$arch
@@ -180,6 +184,10 @@ runs:
           [community-stable]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/stable/$arch
+          
+          [community-extra]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/extra/$arch
           
           [biglinux-stable]
           SigLevel = PackageRequired
