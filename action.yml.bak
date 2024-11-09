@@ -3,7 +3,7 @@ description: 'Builds Manjaro/Community Packages'
 
 inputs:
   build_env:
-    description: 'Build environment (testing or stable)'
+    description: 'Build environment (testing, extra, stable, or aur)'
     required: true
     default: 'testing'
   source:
@@ -38,6 +38,7 @@ inputs:
   extra_package:
     description: 'Extra package to build'
     required: false
+    default: 'false'
   tmate:
     description: 'Run tmate for debugging'
     required: false
@@ -49,7 +50,7 @@ inputs:
     description: 'Development repository'
     required: false
   pacman_mirror:
-    description: 'Pacman mirror URL'
+    description: 'Optional: Specific mirror to override automatic selection'
     required: false
     default: 'https://nnenix.mm.fcix.net/manjaro/stable/$repo/$arch'
   publish_github:
@@ -97,29 +98,38 @@ inputs:
   package_name:
     description: 'Nome do pacote'
     required: false
+  aur_package_dir:
+    description: 'Directory containing the AUR package'
+    required: false
+    default: '.'
 
 # Definição dos passos da ação
 runs:
   using: "composite"
   steps:
+    - name: Debug Inputs
+      shell: bash
+      run: |
+        echo "DEBUG: All inputs"
+        echo "${{ toJson(inputs) }}"
+        echo "DEBUG: build_env from input: ${{ inputs.build_env }}"
+        echo "DEBUG: build_env from env: $DEBUG_BUILD_ENV"
+        echo "DEBUG: tmate input: ${{ inputs.tmate }}"
+        echo "DEBUG: All env variables"
+        env | sort
+  
     # Configuração do ambiente de build
     - name: Setup build environment
       shell: bash
       run: |
         # Atualiza o sistema e instala as dependências necessárias
-        sudo pacman -Syu --noconfirm
-        sudo pacman -S --needed --noconfirm \
+        sudo pacman -Syu --quiet --needed --noconfirm \
           base-devel \
           cmake \
-          fakeroot \
-          jq \
           libarchive \
-          curl \
-          gnupg \
-          openssl \
-          zip \
           meson \
-          ninja
+          ninja \
+          yay
           
         # Verifica as versões instaladas
         meson --version
@@ -129,33 +139,76 @@ runs:
     - name: Configure System and Repositories
       shell: bash
       run: |
+        echo "Build environment: ${{ inputs.build_env }}"
+        echo "Build environment from env: $DEBUG_BUILD_ENV"
+        echo "All inputs:"
+        echo "${{ toJson(inputs) }}"
+        echo "DEBUG: BRANCH_TYPE: $BRANCH_TYPE"
+        
         # Set up pacman mirror
-        echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
+          echo "Usando mirror especificado: ${{ inputs.pacman_mirror }}"
+          echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
         
         # Remove existing BigLinux repositories
         sudo sed -i '/biglinux/,$d' /etc/pacman.conf
         
         # Add appropriate repositories based on build environment
-        if [ "${{ inputs.build_env }}" == "testing" ]; then
+        if [ "${{ inputs.build_env }}" == "testing" ] || [ "$BRANCH_TYPE" == "testing" ]; then
           echo '
           [community-testing]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/testing/$arch
           
+          [community-stable]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/stable/$arch
+          
+          [community-extra]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/extra/$arch
+          
           [biglinux-testing]
           SigLevel = PackageRequired
-          Server = https://repo.biglinux.com.br/testing/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
-        elif [ "${{ inputs.build_env }}" == "stable" ]; then
+          Server = https://repo.biglinux.com.br/testing/$arch
+          
+          [biglinux-stable]
+          SigLevel = PackageRequired
+          Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+        elif [ "${{ inputs.build_env }}" == "extra" ] || [ "$BRANCH_TYPE" == "extra" ]; then
+          echo '
+          [community-extra]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/extra/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+        elif [ "${{ inputs.build_env }}" == "stable" ] || [ "$BRANCH_TYPE" == "stable" ]; then
           echo '
           [community-stable]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/stable/$arch
           
+          [community-extra]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/extra/$arch
+          
           [biglinux-stable]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+        elif [ "${{ inputs.build_env }}" == "aur" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
+          echo "Configurando para pacote AUR: ${{ inputs.package_name }}"
+          # Configurações específicas para AUR
+          sudo sed -i 's/^#MAKEFLAGS="-j2"/MAKEFLAGS="-j$(nproc)"/' /etc/makepkg.conf
+          sudo sed -i 's/^#BUILDDIR/BUILDDIR/' /etc/makepkg.conf
+          sudo sed -i 's/^#PKGDEST/PKGDEST/' /etc/makepkg.conf
+          
+          # Habilitar o repositório multilib (necessário para alguns pacotes AUR)
+          sudo sed -i '/\[multilib\]/,/Include/s/^#//' /etc/pacman.conf
+          
+          # Atualizar os repositórios após as mudanças
+          sudo pacman -Sy
+          
+          # Instalar dependências comumente necessárias para builds AUR
+          sudo pacman -S --needed base-devel git --noconfirm
         else
-          echo "Invalid build environment specified"
+          echo "Invalid branch type specified: ${{ inputs.branch_type }}"
           exit 1
         fi
         
@@ -168,11 +221,24 @@ runs:
         sudo sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
 
   
-    # # Download the source code
+    # Download the source code
     - name: Download Source
       shell: bash
       run: |
-        if [ -n "${{ inputs.url }}" ]; then
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          echo "Cloning AUR package from ${{ inputs.url }}"
+          git clone ${{ inputs.url }} aur_package
+          if [ -d "aur_package" ]; then
+            cd aur_package
+            if [ ! -f "PKGBUILD" ]; then
+              echo "Error: PKGBUILD not found in the AUR package"
+              exit 1
+            fi
+          else
+            echo "Error: Failed to clone AUR package"
+            exit 1
+          fi
+        elif [ -n "${{ inputs.url }}" ]; then
           echo "Cloning repository from ${{ inputs.url }}"
           git clone ${{ inputs.url }}.git source_repo
           cd source_repo
@@ -183,13 +249,31 @@ runs:
         else
           echo "No URL provided, assuming we're already in the correct repository"
         fi
+        
+        # Debug: Show current directory and contents
+        echo "Current directory: $(pwd)"
+        echo "Directory contents:"
+        ls -la
   
+  
+    ### Setup tmate session for debugging if enabled
+    - name: Setup TMATE Session
+      uses: mxschmitt/action-tmate@v3
+      if: inputs.tmate == 'true'
+      with:
+        install-dependencies: false
+
   
     # Constrói o pacote
     - name: Build package
       shell: bash
       run: |
-        # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
+        set -ex  # Isso fará o script falhar se qualquer comando falhar
+        # Debug: Mostrar ambiente de build
+        echo "Build environment: ${{ inputs.build_env }}"
+        echo "Package name: ${{ inputs.package_name }}"
+        
+         # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
         if [ -d "source_repo" ]; then
           cd source_repo
         fi
@@ -199,25 +283,75 @@ runs:
         echo "Directory contents:"
         ls -la
         
-        # Create build user
-        useradd builduser -m
-        passwd -d builduser
-        printf 'builduser ALL=(ALL) ALL\n' | sudo tee -a /etc/sudoers
+        # Create and set permissions for $PKGDEST and $SRCDEST
+        sudo mkdir -p /home/packages /home/sources
+        sudo chown builduser:builduser /home/packages /home/sources
         
-        # Find and enter the directory containing PKGBUILD
-        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-        cd $gitfolder
-        
-        # Set architecture
-        pkgArch=$(grep -E "\barch=" PKGBUILD | cut -d "=" -f2 | tr -cd '[:alnum:]_' | head -n1)
-        if [ "$pkgArch" = "any" ]; then
-          sed -i "/\barch=/s/arch=.*/arch=('x86_64' 'aarch64')/" PKGBUILD
-        fi
-        
-        # Build for x86_64
-        if [ -n "$(sed -n '/\barch=/p' PKGBUILD | grep x86_64)" ]; then
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          # For packages AUR
+          cd ${{ inputs.aur_package_dir }}
+          echo "Construindo pacote AUR: ${{ inputs.package_name }}"
+          echo "Current AUR package directory: $(pwd)"
+          echo "AUR package directory contents:"
+          ls -la
+
+          # Give permissions to builduser for the current directory
+          sudo chown -R builduser:builduser .
+
+          # Create temporary directory for makepkg
+          sudo mkdir -p /tmp/makepkg
+          sudo chown builduser:builduser /tmp/makepkg
+
+          # Extract dependencies from PKGBUILD
+          source PKGBUILD
+
+          # Install all dependencies using yay
+          install_dependencies() {
+              if [ -n "$depends" ] || [ -n "$makedepends" ]; then
+                  echo "Installing all dependencies..."
+                  yay -Sy --asdeps --needed --noanswerdiff --noconfirm "${depends[@]}" "${makedepends[@]}" || {
+                      echo "Error installing dependencies"
+                      return 1
+                  }
+              fi
+              return 0
+          }
+
+          # Call the installation function
+          if ! install_dependencies; then
+              echo "Failed to install dependencies"
+              exit 1
+          fi
+
+          # Build the package without installing
+          echo "Building AUR package: ${{ inputs.package_name }}"
+          makepkg -s --noconfirm --noprogressbar --nodeps --skipchecksums
+
+          # Move the compiled package to /home/packages
+          mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
+
+          echo "Build completed. Checking /home/packages:"
+          ls -la /home/packages
+        else
+          # Para pacotes não-AUR
+          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          cd $gitfolder
+          
+          # Ensure architecture is set to x86_64
+          sed -i "/^arch=/c\arch=('x86_64')" PKGBUILD
+          
+          # Build for x86_64
           echo -e "\033[01;31mBuild x86_64\033[0m"
-          sudo -u builduser bash -c "sudo chrootbuild -H -p . -b ${{ inputs.branch_type }}"
+          # Determinar o branch de build
+          if [ "${{ inputs.build_env }}" == "extra" ]; then
+            build_branch="testing"
+            echo "Ambiente de build é 'extra', usando branch 'testing' para chrootbuild"
+          else
+            build_branch="${{ inputs.branch_type }}"
+          fi
+          
+          # Executar chrootbuild com o branch determinado
+          sudo chrootbuild -H -p . -b ${build_branch}
         fi
         
         # Executa comando extra, se fornecido
@@ -225,6 +359,14 @@ runs:
           echo "Executando comando extra: ${{ inputs.extra_command }}"
           ${{ inputs.extra_command }}
         fi
+        
+        # Debug: Mostrar conteúdo do diretório após o build
+        echo "Directory contents after build:"
+        ls -la
+        echo "Contents of /home/packages:"
+        ls -la /home/packages
+        echo "Contents of /home/sources:"
+        ls -la /home/sources
 
   
     # Assina o pacote
@@ -234,58 +376,72 @@ runs:
         # Importa a chave GPG
         echo "${{ inputs.gpg_key }}" | gpg --batch --import &>/dev/null
         
-        # Encontra o diretório que contém o PKGBUILD
-        gitfolder=$(find . -type f -name PKGBUILD | sed 's/PKGBUILD$//')
-        if [ -z "$gitfolder" ]; then
-          echo "PKGBUILD não encontrado. Usando diretório atual."
-          gitfolder="."
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          # Para pacotes AUR
+          cd /home/packages
+        else
+          # Para pacotes não-AUR
+          gitfolder=$(find . -type f -name PKGBUILD | sed 's/PKGBUILD$//')
+          if [ -z "$gitfolder" ]; then
+            echo "PKGBUILD não encontrado. Usando diretório atual."
+            gitfolder="."
+          fi
+          cd "$gitfolder"
         fi
-        cd "$gitfolder"
         
         # Assina todos os pacotes encontrados
         for p in $(find $PWD -maxdepth 1 -regex '.*\.pkg\.tar\.\(xz\|zst\)'); do
-          echo "Assinando pacote: $p"
-          gpg --pinentry-mode loopback --passphrase "${{ inputs.gpg_passphrase }}" --detach-sign "${p}"
+          if [ -f "$p" ]; then
+            echo "Assinando pacote: $p"
+            gpg --pinentry-mode loopback --passphrase "${{ inputs.gpg_passphrase }}" --detach-sign "${p}"
+          fi
         done
         
         # Lista os arquivos .sig gerados
         echo "Arquivos de assinatura gerados:"
-        ls -l *.sig
+        ls -l *.sig || echo "Nenhum arquivo .sig encontrado"
 
   
     # Gera checksums para os pacotes
     - name: Generate checksums
       shell: bash
       run: |
-        # Encontra o diretório que contém o PKGBUILD
-        gitfolder=$(find . -type f -name PKGBUILD | sed 's/PKGBUILD$//')
-        if [ -z "$gitfolder" ]; then
-          echo "PKGBUILD não encontrado. Usando diretório atual."
-          gitfolder="."
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          # Para pacotes AUR
+          cd /home/packages
+        else
+          # Para pacotes não-AUR
+          gitfolder=$(find . -type f -name PKGBUILD | sed 's/PKGBUILD$//')
+          if [ -z "$gitfolder" ]; then
+            echo "PKGBUILD não encontrado. Usando diretório atual."
+            gitfolder="."
+          fi
+          cd "$gitfolder"
         fi
-        cd "$gitfolder"
         
         # Gera checksums para pacotes e assinaturas
         for i in *.pkg.tar.zst; do
           if [ -f "$i" ]; then
             md5sum "$i" >> "$i.md5"
+            echo "Gerado MD5 para $i"
           fi
         done
         
         for i in *.sig; do
           if [ -f "$i" ]; then
             md5sum "$i" >> "${i%.sig}.md5"
+            echo "Gerado MD5 para $i"
           fi
         done
         
         # Lista os arquivos MD5 gerados
         echo "Arquivos MD5 gerados:"
-        ls -l *.md5
+        ls -l *.md5 || echo "Nenhum arquivo MD5 encontrado"
   
   
     # Publish the package on GitHub
     - name: Publish Package on GitHub
-      if: inputs.publish_github == 'true'
+      if: inputs.publish_github == 'true' && inputs.build_env != 'aur'
       shell: bash
       run: |
         gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
@@ -347,26 +503,36 @@ runs:
         LC_ALL: en_US.UTF-8
       run: |
         # Set up SSH
-        ssh-keyscan -t rsa -p ${{ inputs.repo_port }} ${{ inputs.repo_host }} >> /root/.ssh/known_hosts
+        mkdir -p /home/builduser/.ssh
+        ssh-keyscan -t rsa -p ${{ inputs.repo_port }} ${{ inputs.repo_host }} >> /home/builduser/.ssh/known_hosts
         ip=${{ inputs.repo_host }}
         
-        # Find the PKGBUILD directory
-        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-        cd $gitfolder
-        ls -lh
-        
-        # Determine the last committer
-        lastCommit=$(git log -1 --format="%an <%ae>")
-        if [ "$(grep github-actions <<< $lastCommit)" ];then
-          lastCommit=$(git log -2 --format="%an <%ae>")
-        fi
-        
-        # Set the branch based on BRANCH_TYPE
-        if [ "${{ inputs.branch_type }}" == "stable" ]; then
-          branch="STABLE"
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          # Para pacotes AUR
+          cd /home/packages
+          branch="EXTRA"  # Todos os pacotes AUR vão para EXTRA
         else
-          branch="TESTING"
+          # Para pacotes não-AUR
+          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          cd $gitfolder
+          
+          # Determine the last committer (apenas para pacotes não-AUR)
+          lastCommit=$(git log -1 --format="%an <%ae>")
+          if [ "$(grep github-actions <<< $lastCommit)" ];then
+            lastCommit=$(git log -2 --format="%an <%ae>")
+          fi
+          
+          # Set the branch based on BRANCH_TYPE
+          if [ "${{ inputs.branch_type }}" == "stable" ]; then
+            branch="STABLE"
+          elif [ "${{ inputs.branch_type }}" == "extra" ]; then
+            branch="EXTRA"
+          else
+            branch="TESTING"
+          fi
         fi
+        
+        ls -lh
         
         # Function to send Telegram message
         send_telegram_message() {
@@ -378,7 +544,7 @@ runs:
         }
         
         # Upload the package files
-        for i in *.zst; do
+        for i in *.pkg.tar.zst; do
           pkgname=$(basename $i)
           
           pkgname_escaped=$(echo "$pkgname" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
@@ -413,12 +579,15 @@ runs:
         }
         
         # Determine the database name based on the branch type
-        if [ "${{ inputs.branch_type }}" == "testing" ]; then
-          branch="TESTING"
-          db_name="community-testing"
-        elif [ "${{ inputs.branch_type }}" == "stable" ]; then
+        if [ "${{ inputs.branch_type }}" == "stable" ]; then
           branch="STABLE"
           db_name="community-stable"
+        elif [ "${{ inputs.branch_type }}" == "extra" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
+          branch="EXTRA"
+          db_name="community-extra"
+        elif [ "${{ inputs.branch_type }}" == "testing" ]; then
+          branch="TESTING"
+          db_name="community-testing"
         else
           echo "Error: Unknown branch type: ${{ inputs.branch_type }}"
           exit 1
@@ -456,12 +625,80 @@ runs:
       if: inputs.update_db == 'true' && success()
       shell: bash
       run: |
+        # Function to send Telegram message
+        send_telegram_message() {
+          message="$1"
+          curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
+            -d chat_id="${{ inputs.telegram_chat_id }}" \
+            -d text="$message" \
+            -d parse_mode="MarkdownV2"
+        }
+
+        # Determine the branch based on the branch type
+        if [ "${{ inputs.branch_type }}" == "stable" ]; then
+          branch="STABLE"
+          db_name="community-stable"
+        elif [ "${{ inputs.branch_type }}" == "extra" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
+          branch="EXTRA"
+          db_name="community-extra"
+        elif [ "${{ inputs.branch_type }}" == "testing" ]; then
+          branch="TESTING"
+          db_name="community-testing"
+        else
+          echo "Error: Unknown branch type: ${{ inputs.branch_type }}"
+          exit 1
+        fi
+
+        echo "Branch: $branch"
+        echo "Database name: $db_name"
+
+        branch_escaped=$(echo "$branch" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
+
+        echo "🧹 Limpando pacotes antigos no repositório $branch..."
+        send_telegram_message "🧹 **Iniciando limpeza de pacotes antigos no repositório** \`$branch_escaped\`"
+
         ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
-          paccache -rk1
-          echo "Comando paccache concluído com código de saída: \$?"
+          
+          # Manter apenas a versão mais recente de cada pacote
+          for pkg in $(ls *.pkg.tar.zst | cut -d- -f1 | sort -u); do
+            newest=\$(ls \${pkg}-*.pkg.tar.zst | sort -V | tail -n1)
+            for old in \${pkg}-*.pkg.tar.zst; do
+              if [ "\$old" != "\$newest" ]; then
+                echo "Removing old package: \$old"
+                rm -f "\$old" "\${old}.sig" "\${old}.md5"
+              fi
+            done
+          done
+
+          # Remover os bancos de dados existentes
+          rm -f $db_name.db.tar.gz $db_name.files.tar.gz
+
+          # Recriar o banco de dados com os pacotes presentes
+          repo-add $db_name.db.tar.gz *.pkg.tar.zst
+
+          # Remover arquivos .sig e .md5 órfãos
+          for file in *.sig *.md5; do
+            base_name=\${file%.*}
+            if [ ! -f "\${base_name}" ]; then
+              echo "Removing orphaned file: \$file"
+              rm -f "\$file"
+            fi
+          done
+          
+          exit_code=\$?
+          echo "Limpeza concluída com código de saída: \$exit_code"
+          exit \$exit_code
         EOF
+
+        if [ $? -eq 0 ]; then
+          echo "✅ Limpeza de pacotes antigos concluída com sucesso!"
+          send_telegram_message "✅ **Limpeza de pacotes antigos no repositório** \`$branch_escaped\` **concluída com sucesso\!**"
+        else
+          echo "❌ Falha na limpeza de pacotes antigos."
+          send_telegram_message "❌ **Falha na limpeza de pacotes antigos no repositório** \`$branch_escaped\`\."
+        fi
 
 
     # Send a Telegram alert if the build fails
