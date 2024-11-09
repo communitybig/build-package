@@ -288,7 +288,7 @@ runs:
         sudo chown builduser:builduser /home/packages /home/sources
         
         if [ "${{ inputs.build_env }}" == "aur" ]; then
-          # Para pacotes AUR
+          # For packages AUR
           cd ${{ inputs.aur_package_dir }}
           echo "Construindo pacote AUR: ${{ inputs.package_name }}"
           echo "Current AUR package directory: $(pwd)"
@@ -298,24 +298,36 @@ runs:
           # Give permissions to builduser for the current directory
           sudo chown -R builduser:builduser .
 
-          # Criar diretório temporário para makepkg
+          # Create temporary directory for makepkg
           sudo mkdir -p /tmp/makepkg
           sudo chown builduser:builduser /tmp/makepkg
 
-          # Extrair dependências do PKGBUILD
-          depends=$(grep -E "^depends=\(" PKGBUILD | sed 's/depends=(//' | sed 's/)$//' | tr -d "'")
-          makedepends=$(grep -E "^makedepends=\(" PKGBUILD | sed 's/makedepends=(//' | sed 's/)$//' | tr -d "'")
+          # Extract dependencies from PKGBUILD
+          source PKGBUILD
 
-          # Instalar dependências
-          echo "Installing dependencies..."
-          #export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
-          sudo -u builduser yay -Sy --asdeps --nodeps --noanswerdiff $depends $makedepends --noconfirm
+          # Install all dependencies using yay
+          install_dependencies() {
+              if [ -n "$depends" ] || [ -n "$makedepends" ]; then
+                  echo "Installing all dependencies..."
+                  yay -Sy --asdeps --needed --noanswerdiff --noconfirm "${depends[@]}" "${makedepends[@]}" || {
+                      echo "Error installing dependencies"
+                      return 1
+                  }
+              fi
+              return 0
+          }
 
-          # Construir o pacote sem instalar
+          # Call the installation function
+          if ! install_dependencies; then
+              echo "Failed to install dependencies"
+              exit 1
+          fi
+
+          # Build the package without installing
           echo "Building AUR package: ${{ inputs.package_name }}"
-          makepkg -s --noconfirm --noprogressbar --nodeps
+          makepkg -s --noconfirm --noprogressbar --nodeps --skipchecksums
 
-          # Mover o pacote compilado para /home/packages
+          # Move the compiled package to /home/packages
           mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
 
           echo "Build completed. Checking /home/packages:"

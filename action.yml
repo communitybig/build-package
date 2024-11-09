@@ -307,10 +307,18 @@ runs:
 
           # Install all dependencies using yay
           install_dependencies() {
+              echo "Installing all dependencies..."
+              
+              # Install gcc first as it's required for compilation
+              yay -S --needed --noconfirm gcc || {
+                  echo "Error installing gcc"
+                  return 1
+              }
+              
+              # Install package dependencies if they exist
               if [ -n "$depends" ] || [ -n "$makedepends" ]; then
-                  echo "Installing all dependencies..."
-                  yay -Sy --asdeps --needed --noanswerdiff --noconfirm "${depends[@]}" "${makedepends[@]}" || {
-                      echo "Error installing dependencies"
+                  yay -S --asdeps --needed --noanswerdiff --noconfirm "${depends[@]}" "${makedepends[@]}" || {
+                      echo "Error installing package dependencies"
                       return 1
                   }
               fi
