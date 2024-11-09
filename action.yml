@@ -303,13 +303,69 @@ runs:
           sudo chown builduser:builduser /tmp/makepkg
 
           # Extract dependencies from PKGBUILD
-          depends=$(grep -E "^depends=\(" PKGBUILD | sed 's/depends=(//' | sed 's/)$//' | tr -d "'")
-          makedepends=$(grep -E "^makedepends=\(" PKGBUILD | sed 's/makedepends=(//' | sed 's/)$//' | tr -d "'")
-
-          # Install dependencies using the PKGBUILD source
           source PKGBUILD
-          echo "Installing dependencies..."
-          sudo -u builduser yay -Sy --asdeps --noanswerdiff "${depends[@]}" "${makedepends[@]}" --noconfirm
+
+          # Function to check if package exists in official repos
+          check_official_repo() {
+              pacman -Si "$1" &>/dev/null
+              return $?
+          }
+
+          # Function to install dependencies
+          install_dependencies() {
+              local -a official_deps=()
+              local -a aur_deps=()
+              
+              # Process regular dependencies
+              if [ -n "$depends" ]; then
+                  echo "Processing dependencies..."
+                  for dep in "${depends[@]}"; do
+                      if check_official_repo "$dep"; then
+                          official_deps+=("$dep")
+                      else
+                          aur_deps+=("$dep")
+                      fi
+                  done
+              fi
+              
+              # Process make dependencies
+              if [ -n "$makedepends" ]; then
+                  echo "Processing make dependencies..."
+                  for dep in "${makedepends[@]}"; do
+                      if check_official_repo "$dep"; then
+                          official_deps+=("$dep")
+                      else
+                          aur_deps+=("$dep")
+                      fi
+                  done
+              fi
+              
+              # Install official repo dependencies first
+              if [ ${#official_deps[@]} -gt 0 ]; then
+                  echo "Installing dependencies from official repos: ${official_deps[*]}"
+                  sudo pacman -S --needed --noconfirm "${official_deps[@]}" || {
+                      echo "Error installing official dependencies"
+                      return 1
+                  }
+              fi
+              
+              # Install AUR dependencies if any
+              if [ ${#aur_deps[@]} -gt 0 ]; then
+                  echo "Installing dependencies from AUR: ${aur_deps[*]}"
+                  yay -S --asdeps --noanswerdiff --noconfirm "${aur_deps[@]}" || {
+                      echo "Error installing AUR dependencies"
+                      return 1
+                  }
+              fi
+              
+              return 0
+          }
+
+          # Call the installation function
+          if ! install_dependencies; then
+              echo "Failed to install dependencies"
+              exit 1
+          fi
 
           # Build the package without installing
           echo "Building AUR package: ${{ inputs.package_name }}"
