@@ -52,7 +52,8 @@ inputs:
   pacman_mirror:
     description: 'Optional: Specific mirror to override automatic selection'
     required: false
-    default: 'https://nnenix.mm.fcix.net/manjaro/stable/$repo/$arch'
+    #default: 'https://nnenix.mm.fcix.net/manjaro/stable/$repo/$arch'
+    default: 'https://mirrors.ocf.berkeley.edu/manjaro/stable/$repo/$arch'
   publish_github:
     description: 'Publish package on GitHub'
     required: false
