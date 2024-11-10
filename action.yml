@@ -354,12 +354,12 @@ runs:
           
           # Criar script de preparação do chroot
           cat > prepare-chroot.sh << 'EOF'
-          #!/bin/bash
-          pacman-key --init
-          pacman-key --populate archlinux manjaro
-          pacman-key --recv-keys 29C71CE612B57264
-          pacman-key --lsign-key 29C71CE612B57264
-          EOF
+#!/bin/bash
+pacman-key --init
+pacman-key --populate archlinux manjaro
+pacman-key --recv-keys 29C71CE612B57264
+pacman-key --lsign-key 29C71CE612B57264
+EOF
           chmod +x prepare-chroot.sh
 
           # Executar chrootbuild com o script de preparação
