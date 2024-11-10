@@ -352,8 +352,21 @@ runs:
             build_branch="stable"
           fi
           
+          # Criar script de preparação do chroot
+          cat > prepare-chroot.sh << 'EOF'
+          #!/bin/bash
+          pacman-key --init
+          pacman-key --populate archlinux manjaro
+          pacman-key --recv-keys 29C71CE612B57264
+          pacman-key --lsign-key 29C71CE612B57264
+          EOF
+          chmod +x prepare-chroot.sh
+
+          # Executar chrootbuild com o script de preparação
+          sudo chrootbuild -H -p . -b ${build_branch} -s ./prepare-chroot.sh
+          
           # Executar chrootbuild com o branch determinado
-          sudo chrootbuild -H -p . -b ${build_branch}
+          #sudo chrootbuild -H -p . -b ${build_branch}
         fi
         
         # Executa comando extra, se fornecido
