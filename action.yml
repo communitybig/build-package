@@ -348,7 +348,8 @@ runs:
             build_branch="testing"
             echo "Ambiente de build é 'extra', usando branch 'testing' para chrootbuild"
           else
-            build_branch="${{ inputs.branch_type }}"
+#             build_branch="${{ inputs.branch_type }}"
+            build_branch="stable"
           fi
           
           # Executar chrootbuild com o branch determinado
