@@ -137,18 +137,17 @@ runs:
           message="$1"
           curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
             -d chat_id="${{ inputs.telegram_chat_id }}" \
-            -d text="$message"\
-            -d parse_mode="MarkdownV2"
+            -d text="$message" \
+            -d parse_mode="HTML"
         }
         pkgname="${{ inputs.package_name }}"
         branch="${{ inputs.branch_type }}"
         repositorio="${{ inputs.repo_dir }}"
-        pkgname_escaped=$(echo "$pkgname" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-        branch_escaped=$(echo "${branch^^}" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-        send_telegram_message "⭐ **\[step 1/5\] Iniciando criação de pacote**%0A"\
-        "**nome:** \`$pkgname_escaped\`%0A"\
-        "**url:** \`$repositorio\`%0A"\
-        "**repositório:** \`$branch_escaped\`"
+        pkgname_escaped=$(echo "$pkgname" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+        branch_escaped=$(echo "${branch^^}" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+        send_telegram_message "⭐ <b>Iniciando criação de pacote</b>
+        <b>Nome:</b> <code>$pkgname_escaped</code>
+        <b>Repositório:</b> <code>$branch_escaped</code>"
 
     - name: Debug Inputs
       shell: bash
@@ -575,24 +574,24 @@ runs:
           message="$1"
           curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
             -d chat_id="${{ inputs.telegram_chat_id }}" \
-            -d text="$message"\
-            -d parse_mode="MarkdownV2"
+            -d text="$message" \
+            -d parse_mode="HTML"
         }
 
         # Upload the package files
         for i in *.pkg.tar.zst; do
           pkgname=$(basename $i)
           
-          pkgname_escaped=$(echo "$pkgname" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-          branch_escaped=$(echo "$branch" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
+          pkgname_escaped=$(echo "$pkgname" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+          branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
           
           echo "📦 Pacote $pkgname sendo enviado para o repositório 🚀 $branch 🎯"
-          send_telegram_message "📦 **Pacote** \`$pkgname_escaped\` **sendo enviado para o repositório** 🚀 \`$branch_escaped\`🎯"
+          send_telegram_message "📦 <b>Pacote</b> <code>$pkgname_escaped</code> <b>sendo enviado para o repositório</b> 🚀 <code>$branch_escaped</code>🎯"
           rsync -vapz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/
           if [ $? -eq 0 ]; then
-            send_telegram_message "✅ **Pacote** \`$pkgname_escaped\` **enviado com sucesso para o repositório** \`$branch_escaped\`"
+            send_telegram_message "✅ <b>Pacote</b> <code>$pkgname_escaped</code> <b>enviado com sucesso para o repositório</b> <code>$branch_escaped</code>"
           else
-            send_telegram_message "❌ **Falha ao enviar o pacote** \`$pkgname_escaped\` **para o repositório** \`$branch_escaped\`"
+            send_telegram_message "❌ <b>Falha ao enviar o pacote</b> <code>$pkgname_escaped</code> <b>para o repositório</b> <code>$branch_escaped</code>"
           fi
         done
         for i in *.sig *.md5; do
@@ -610,7 +609,7 @@ runs:
           curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
             -d chat_id="${{ inputs.telegram_chat_id }}" \
             -d text="$message" \
-            -d parse_mode="MarkdownV2"
+            -d parse_mode="HTML"
         }
 
         # Determine the database name based on the branch type
@@ -631,11 +630,11 @@ runs:
         echo "Branch: $branch"
         echo "Database name: $db_name"
 
-        branch_escaped=$(echo "$branch" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-        db_name_escaped=$(echo "$db_name" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
+        branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+        db_name_escaped=$(echo "$db_name" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
         echo "🔄 Sincronizando o banco de dados do repositório $branch..."
-        send_telegram_message "🔄 **Iniciando sincronização do banco de dados do repositório** \`$branch_escaped\`"
+        send_telegram_message "🔄 <b>Iniciando sincronização do banco de dados do repositório</b> <code>$branch_escaped</code>"
 
         ssh -v ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           set -x
@@ -648,10 +647,10 @@ runs:
 
         if [ $? -eq 0 ]; then
           echo "✅ Sincronização do banco de dados concluída com sucesso!"
-          send_telegram_message "✅ **Sincronização do banco de dados do repositório** \`$branch_escaped\` **concluída com sucesso\!**"
+          send_telegram_message "✅ <b>Sincronização do banco de dados do repositório</b> <code>$branch_escaped</code> <b>concluída com sucesso!</b>"
         else
           echo "❌ Falha na sincronização do banco de dados."
-          send_telegram_message "❌ **Falha na sincronização do banco de dados do repositório** \`$branch_escaped\`\."
+          send_telegram_message "❌ <b>Falha na sincronização do banco de dados do repositório</b> <code>$branch_escaped</code>"
         fi
 
     # Keeps only the most recent package
@@ -665,7 +664,7 @@ runs:
           curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
             -d chat_id="${{ inputs.telegram_chat_id }}" \
             -d text="$message" \
-            -d parse_mode="MarkdownV2"
+            -d parse_mode="HTML"
         }
 
         # Determine the branch based on the branch type
@@ -686,10 +685,10 @@ runs:
         echo "Branch: $branch"
         echo "Database name: $db_name"
 
-        branch_escaped=$(echo "$branch" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
+        branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
         echo "🧹 Limpando pacotes antigos no repositório $branch..."
-        send_telegram_message "🧹 **Iniciando limpeza de pacotes antigos no repositório** \`$branch_escaped\`"
+        send_telegram_message "🧹 <b>Iniciando limpeza de pacotes antigos no repositório</b> <code>$branch_escaped</code>"
 
         ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           set -x
@@ -728,10 +727,10 @@ runs:
 
         if [ $? -eq 0 ]; then
           echo "✅ Limpeza de pacotes antigos concluída com sucesso!"
-          send_telegram_message "✅ **Limpeza de pacotes antigos no repositório** \`$branch_escaped\` **concluída com sucesso\!**"
+          send_telegram_message "✅ <b>Limpeza de pacotes antigos no repositório</b> <code>$branch_escaped</code> <b>concluída com sucesso!</b>"
         else
           echo "❌ Falha na limpeza de pacotes antigos."
-          send_telegram_message "❌ **Falha na limpeza de pacotes antigos no repositório** \`$branch_escaped\`\."
+          send_telegram_message "❌ <b>Falha na limpeza de pacotes antigos no repositório</b> <code>$branch_escaped</code>"
         fi
 
     # Send a Telegram alert if the build fails
@@ -741,4 +740,5 @@ runs:
       run: |
         curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
           -d chat_id="${{ inputs.telegram_chat_id }}" \
-          -d text="🚨 FALHA ao criar Pacote Community: ${{ github.event.action }} a partir do branch ${{ github.ref_name }}, link do erro: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} 🖥"
+          -d text="🚨 <b>FALHA ao criar Pacote Community:</b> ${{ github.event.action }} a partir do branch ${{ github.ref_name }}, <a href='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'>link do erro</a> 🖥" \
+          -d parse_mode="HTML"
