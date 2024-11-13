@@ -143,11 +143,15 @@ runs:
         pkgname="${{ inputs.package_name }}"
         branch="${{ inputs.branch_type }}"
         repositorio="${{ inputs.repo_dir }}"
+        started_by_user="${{ github.actor }}"
+        triggered_by_user="${{ github.triggering_actor }}"
         pkgname_escaped=$(echo "$pkgname" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
         branch_escaped=$(echo "${branch^^}" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-        send_telegram_message "⭐ <b>Iniciando criação de pacote</b>
+        send_telegram_message "⭐️ <b>Iniciando criação de pacote</b>
         <b>Nome:</b> <code>$pkgname_escaped</code>
+        <b>Iniciado/Triggered por:</b> <code>$started_by_user/$triggered_by_user</code>
         <b>Repositório:</b> <code>$branch_escaped</code>"
+
 
     - name: Debug Inputs
       shell: bash
