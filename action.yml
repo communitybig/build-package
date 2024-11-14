@@ -591,7 +591,7 @@ runs:
 
           echo "📦 Pacote $pkgname sendo enviado para o repositório 🚀 $branch 🎯"
           send_telegram_message "📦 <b>Pacote</b> <code>$pkgname_escaped</code>
-          <b>Tamanho bytes/Kb</b> <code>${file_size_bytes}/${file_size_kb}</code>
+          <b>Tamanho</b> <code>${file_size_bytes}b/${file_size_kb}kb</code>
           <b>sendo enviado para o repositório</b> 🚀<code>$branch_escaped</code>🎯"
 
           rsync -vapz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/
