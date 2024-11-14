@@ -591,7 +591,7 @@ runs:
           branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
           echo "📦 Pacote $pkgname sendo enviado para o repositório 🚀 $branch 🎯"
-          send_telegram_message "📦 <b>Pacote</b> <code>$pkgname_escaped</code><br><b>Tamanho B/KB</b> <code>${file_size_bytes}/${file_size_kb}</code><br><b>sendo enviado para o repositório</b> 🚀<br><code>$branch_escaped</code>🎯" "HTML"
+          send_telegram_message "📦 <b>Pacote</b> <code>$pkgname_escaped</code><br><b>Tamanho Kb</b> <code>${file_size_kb}</code><br><b>sendo enviado para o repositório</b> 🚀<br><code>$branch_escaped</code>🎯" "HTML"
           rsync -vapz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/
           if [ $? -eq 0 ]; then
             send_telegram_message "✅ <b>Pacote</b> <code>$pkgname_escaped</code> <b>enviado com sucesso para o repositório</b> <code>$branch_escaped</code>"
