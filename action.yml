@@ -202,7 +202,7 @@ runs:
           meson \
           ninja \
           yay
-          
+
         # Verifica as versões instaladas
         meson --version
         ninja --version
@@ -229,11 +229,11 @@ runs:
           [community-testing]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/testing/$arch
-          
+
           [community-stable]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/stable/$arch
-          
+
           [community-extra]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/extra/$arch
@@ -255,7 +255,7 @@ runs:
           [community-stable]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/stable/$arch
-          
+
           [community-extra]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/extra/$arch
@@ -404,10 +404,10 @@ runs:
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
           cd $gitfolder
-          
+
           # Ensure architecture is set to x86_64
           sed -i "/^arch=/c\arch=('x86_64')" PKGBUILD
-          
+
           # Build for x86_64
           echo -e "\033[01;31mBuild x86_64\033[0m"
           # Determinar o branch de build
@@ -418,7 +418,7 @@ runs:
             #build_branch="${{ inputs.branch_type }}"
             build_branch="stable"
           fi
-          
+
           # Executar chrootbuild com o branch determinado
           sudo chrootbuild -H -p . -b ${build_branch}
         fi
@@ -698,6 +698,7 @@ runs:
           db_name="community-testing"
         else
           echo "Error: Unknown branch type: ${{ inputs.branch_type }}"
+          send_telegram_message "❌ <b>Error: Unknown branch type</b> <code>${{ inputs.branch_type }}" "HTML"
           exit 1
         fi
 
