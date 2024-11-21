@@ -143,12 +143,25 @@ runs:
       run: |
         # Definir a função send_telegram_message no script temporário
         cat << 'EOF' > /tmp/send_telegram_message.sh
+        # Definindo variáveis de cores
+        export green="\033[01;32m"
+        export red="\033[01;31m"
+        export blue="\033[01;34m"
+        export cyan="\033[01;36m"
+        export pink="\033[01;35m"
+        export yellow="\033[01;33m"
+        export reset="\033[0m"
+
         send_telegram_message() {
           local message="$1"
           local parse_mode="$2"
 
           # Define parse_mode como "MarkdownV2" se não for especificado
-          [[ -z $parse_mode ]] && parse_mode="MarkdownV2"
+          [[ -z $parse_mode ]] && parse_mode="HTML"
+
+          # Remove as tags HTML e exibe o resultado no terminal
+          echo -e "${red}$(sed 's/<[^>]*>//g' <<< "$message")${reset}"
+          # Envia a mensagem original com HTML para o Telegram
           curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
             -d chat_id="${{ inputs.telegram_chat_id }}" \
             -d text="$message" \
@@ -172,11 +185,12 @@ runs:
         pkgname_escaped=$(echo "$pkgname" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
         branch_escaped=$(echo "${branch^^}" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-        send_telegram_message "⭐️ <b>Iniciando criação de pacote</b>
+        message="⭐️ <b>Iniciando criação de pacote</b>
         <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
         <b>Nome:</b> <code>$pkgname_escaped</code>
         <b>Origem:</b> <code>${repo_origem}</code>
-        <b>Repositório:</b> <code>$branch_escaped</code>" "HTML"
+        <b>Repositório:</b> <code>$branch_escaped</code>"
+        send_telegram_message "$message"
 
     - name: Debug Inputs
       shell: bash
@@ -612,20 +626,19 @@ runs:
           file_size_bytes=$(stat -c%s "$i")
           file_size_kb=$((file_size_bytes / 1024))
 
-          echo "📦 Pacote $pkgname sendo enviado para o repositório 🚀 $branch 🎯"
-          send_telegram_message "📦 <b>Enviando pacote para o repositório</b>
+          message="📦 <b>build-package - Enviando pacote para o repositório</b>
           <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
           <b>Pacote:</b> <code>${pkgname_escaped}</code>
           <b>Tamanho bytes/kb:</b> <code>${file_size_bytes}/${file_size_kb}k</code>
-          <b>Repositório:</b> <code>${branch_escaped}</code>" "HTML"
+          <b>Repositório:</b> <code>${branch_escaped}</code>"
+          send_telegram_message "$message"
 
           if rsync -vapz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/; then
-            send_telegram_message "✅ <b>Pacote</b> <code>$pkgname_escaped</code>
-            <b>enviado com sucesso para o repositório</b> <code>$branch_escaped</code>"
+            message="✅ <b>Pacote enviado com sucesso para o repositório</b>"
           else
-            send_telegram_message "❌ <b>Falha ao enviar o pacote</b> <code>$pkgname_escaped</code>
-            <b>para o repositório</b> <code>$branch_escaped</code>"
+            message="❌ <b>Falha ao enviar o pacote para o repositorio</b>"
           fi
+          send_telegram_message "$message"
         done
 
         for i in *.sig *.md5; do
@@ -651,35 +664,32 @@ runs:
           branch="TESTING"
           db_name="community-testing"
         else
-          echo "Error: Unknown branch type: ${{ inputs.branch_type }}"
+          echo "${red}Error: Unknown branch type: ${{ inputs.branch_type }} ${reset}"
           exit 1
         fi
 
         echo "Branch: $branch"
         echo "Database name: $db_name"
-
         branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
         db_name_escaped=$(echo "$db_name" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-
-        echo "🔄 Sincronizando o banco de dados do repositório $branch..."
-        send_telegram_message "🔄 <b>Iniciando sincronização do banco de dados do repositório</b> <code>$branch_escaped</code>" "HTML"
+        message="🔄 <b>build-package - Iniciando sincronização do banco de dados do repositório</b>"
+        send_telegram_message "$message"
 
         ssh -v ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
           repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
           exit_code=\$?
-          echo "Comando repo-add concluído com código de saída: \$exit_code"
+          echo "${cyan}Comando repo-add concluído com código de saída: ${yellow}\$exit_code ${reset]"
           exit \$exit_code
         EOF
 
         if [ $? -eq 0 ]; then
-          echo "✅ Sincronização do banco de dados concluída com sucesso!"
-          send_telegram_message "✅ <b>Sincronização do banco de dados do repositório</b> <code>$branch_escaped</code> <b>concluída com sucesso!</b>" "HTML"
+          message="✅ <b>build-package - Sincronização do banco de dados no repositório concluida com sucesso</b>"
         else
-          echo "❌ Falha na sincronização do banco de dados."
-          send_telegram_message "❌ <b>Falha na sincronização do banco de dados do repositório</b> <code>$branch_escaped</code>" "HTML"
+          message="❌ <b>build-package - Falha na sincronização do banco de dados no repositório</b>"
         fi
+        send_telegram_message "$message"
 
     # Keeps only the most recent package
     - name: Clean Old Packages
@@ -700,18 +710,17 @@ runs:
           branch="TESTING"
           db_name="community-testing"
         else
-          echo "Error: Unknown branch type: ${{ inputs.branch_type }}"
-          send_telegram_message "❌ <b>Error: Unknown branch type</b> <code>${{ inputs.branch_type }}" "HTML"
+          message="❌ <b>Error: Unknown branch type</b>
+          <code>${{ inputs.branch_type }}"
+          send_telegram_message "$message"
           exit 1
         fi
 
         echo "Branch: $branch"
         echo "Database name: $db_name"
-
         branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-
-        echo "🧹 Limpando pacotes antigos no repositório $branch..."
-        send_telegram_message "🧹 <b>Iniciando limpeza de pacotes antigos no repositório</b> <code>$branch_escaped</code>" "HTML"
+        message="🧹 <b>build-package - Iniciando limpeza de pacotes antigos no repositório</b>"
+        send_telegram_message "$message"
 
         ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           set -x
@@ -722,17 +731,17 @@ runs:
             newest=\$(ls \${pkg}-*.pkg.tar.zst | sort -V | tail -n1)
             for old in \${pkg}-*.pkg.tar.zst; do
               if [ "\$old" != "\$newest" ]; then
-                echo "Removing old package: \$old"
+                echo "${red}Removing old package: \$old ${reset}"
                 rm -f "\$old" "\${old}.sig" "\${old}.md5"
               fi
             done
           done
 
           # Remover os bancos de dados existentes
-          rm -f $db_name.db.tar.gz $db_name.files.tar.gz
+          rm -f ${db_name}.db.tar.gz ${db_name}.files.tar.gz
 
           # Recriar o banco de dados com os pacotes presentes
-          repo-add $db_name.db.tar.gz *.pkg.tar.zst
+          repo-add ${db_name}.db.tar.gz *.pkg.tar.zst
 
           # Remover arquivos .sig e .md5 órfãos
           for file in *.sig *.md5; do
@@ -742,19 +751,17 @@ runs:
               rm -f "\$file"
             fi
           done
-
           exit_code=\$?
-          echo "Limpeza concluída com código de saída: \$exit_code"
+          echo "${cyan}Limpeza concluída com código de saída: ${yellow}\$exit_code ${reset}"
           exit \$exit_code
         EOF
 
         if [ $? -eq 0 ]; then
-          echo "✅ Limpeza de pacotes antigos concluída com sucesso!"
-          send_telegram_message "✅ <b>Limpeza de pacotes antigos no repositório</b> <code>$branch_escaped</code> <b>concluída com sucesso!</b>" "HTML"
+          message="✅ <b>build-package - Limpeza de pacotes antigos no repositório</b>"
         else
-          echo "❌ Falha na limpeza de pacotes antigos."
-          send_telegram_message "❌ <b>Falha na limpeza de pacotes antigos no repositório</b> <code>$branch_escaped</code>" "HTML"
+          message="❌ <b>Falha na limpeza de pacotes antigos no repositório</b>"
         fi
+        send_telegram_message "$message"
 
     # Send a Telegram alert if the build fails
     - name: Telegram Alert Fail
@@ -781,8 +788,8 @@ runs:
         hours=$((duration / 3600))
         minutes=$(( (duration % 3600) / 60 ))
         seconds=$((duration % 60))
-        echo "Duração total da action: ${hours}h ${minutes}m ${seconds}s"
-        send_telegram_message "⏳ <b>Job finalizado em:</b> <code>${hours}h ${minutes}m ${seconds}s</code>
+        message="⏳ <b>build-package - JOB FINALIZADO EM:</b> <code>${hours}h ${minutes}m ${seconds}s</code>
         <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
         <b>Inicio:</b> <code>${START_TIME}</code>
-        <b>Fim   :</b> <code>${END_TIME}</code>" "HTML"
+        <b>Fim   :</b> <code>${END_TIME}</code>"
+        send_telegram_message "$message"
