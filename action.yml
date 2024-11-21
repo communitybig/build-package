@@ -634,7 +634,8 @@ runs:
           send_telegram_message "$message"
 
           if rsync -vapz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/; then
-            message="✅ <b>build-package - Pacote enviado com sucesso para o repositório</b>"
+            #message="✅ <b>build-package - Pacote enviado com sucesso para o repositório</b>"
+            :
           else
             message="❌ <b>build-package - Falha ao enviar o pacote para o repositorio</b>"
           fi
@@ -672,8 +673,9 @@ runs:
         echo "Database name: $db_name"
         branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
         db_name_escaped=$(echo "$db_name" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-        message="🔄 <b>build-package - Iniciando sincronização do banco de dados no repositório</b>"
-        send_telegram_message "$message"
+
+        #message="🔄 <b>build-package - Iniciando sincronização do banco de dados no repositório</b>"
+        #send_telegram_message "$message"
 
         ssh -v ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           set -x
@@ -685,7 +687,8 @@ runs:
         EOF
 
         if [ $? -eq 0 ]; then
-          message="✅ <b>build-package - Sincronização do banco de dados no repositório concluida com sucesso</b>"
+          #message="✅ <b>build-package - Sincronização do banco de dados no repositório concluida com sucesso</b>"
+          :
         else
           message="❌ <b>build-package - Falha na sincronização do banco de dados no repositório</b>"
         fi
@@ -719,8 +722,9 @@ runs:
         echo "Branch: $branch"
         echo "Database name: $db_name"
         branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-        message="🧹 <b>build-package - Iniciando limpeza de pacotes antigos no repositório</b>"
-        send_telegram_message "$message"
+
+        #message="🧹 <b>build-package - Iniciando limpeza de pacotes antigos no repositório</b>"
+        #send_telegram_message "$message"
 
         ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           set -x
@@ -757,7 +761,8 @@ runs:
         EOF
 
         if [ $? -eq 0 ]; then
-          message="✅ <b>build-package - Limpeza de pacotes antigos no repositório</b>"
+          #message="✅ <b>build-package - Limpeza de pacotes antigos no repositório</b>"
+          :
         else
           message="❌ <b>Falha na limpeza de pacotes antigos no repositório</b>"
         fi
