@@ -185,7 +185,7 @@ runs:
         pkgname_escaped=$(echo "$pkgname" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
         branch_escaped=$(echo "${branch^^}" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-        message="⭐️ <b>Iniciando criação de pacote</b>
+        message="⭐️ <b>build-package - Iniciando criação de pacote</b>
         <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
         <b>Nome:</b> <code>$pkgname_escaped</code>
         <b>Origem:</b> <code>${repo_origem}</code>
@@ -672,7 +672,7 @@ runs:
         echo "Database name: $db_name"
         branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
         db_name_escaped=$(echo "$db_name" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-        message="🔄 <b>build-package - Iniciando sincronização do banco de dados do repositório</b>"
+        message="🔄 <b>build-package - Iniciando sincronização do banco de dados no repositório</b>"
         send_telegram_message "$message"
 
         ssh -v ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
@@ -680,7 +680,7 @@ runs:
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
           repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
           exit_code=\$?
-          echo "${cyan}Comando repo-add concluído com código de saída: ${yellow}\$exit_code ${reset]"
+          echo -e "${red}Comando repo-add concluído com código de saída: \$exit_code ${reset}"
           exit \$exit_code
         EOF
 
