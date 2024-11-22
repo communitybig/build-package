@@ -190,7 +190,7 @@ runs:
         <b>Nome:</b> <code>$pkgname_escaped</code>
         <b>Origem:</b> <code>${repo_origem}</code>
         <b>Repositório:</b> <code>$branch_escaped</code>"
-        send_telegram_message "$message"
+        #send_telegram_message "$message"
 
     - name: Debug Inputs
       shell: bash

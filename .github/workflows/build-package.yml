@@ -75,13 +75,17 @@ jobs:
         run: |
           started_by_user="${{ github.actor }}"
           triggered_by_user="${{ github.triggering_actor }}"
+          pkgname="${{ inputs.package_name }}"
+          repo_origem="${{ inputs.url }}"
           link_action=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
 
           MESSAGE="🚀 <b>build-package - WORKFLOW INICIADO</b>
-          <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+          <b>Job    :</b> <code>#${GITHUB_RUN_NUMBER}</code>
           <b>Job URL:</b> <a href='https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}'>${link_action}</a>
           <b>Iniciado/Triggered por:</b> <code>$started_by_user/$triggered_by_user</code>
-          <b>Inicio:</b> <code>${{ env.START_TIME }}</code>"
+          <b>Nome   :</b> <code>$pkgname_escaped</code>
+          <b>Origem :</b> <code>${repo_origem}</code>
+          <b>Inicio :</b> <code>${{ env.START_TIME }}</code>"
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
             -d chat_id="${CHAT_ID}" \
