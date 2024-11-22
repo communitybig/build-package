@@ -773,10 +773,21 @@ runs:
       if: failure()
       shell: bash
       run: |
-        curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
-          -d chat_id="${{ inputs.telegram_chat_id }}" \
-          -d text="🚨 <b>FALHA ao criar Pacote Community:</b> ${{ github.event.action }} a partir do branch ${{ github.ref_name }}, <a href='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'>link do erro</a> 🖥" \
-          -d parse_mode="HTML"
+        # Function to send Telegram message
+        source /tmp/send_telegram_message.sh
+
+        link_action=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        MESSAGE="🚀 <b>build-package - WORKFLOW INICIADO</b>
+        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+        <b>Job URL:</b> <a href='https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}'>${link_action}</a>
+
+
+        message="🚨 <b>FALHA ao criar pacote:</b>
+        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+        <b>Pacote:</b> <code>${{ github.event.action }}</code>
+        <b>Branch:</b> <code>${{ github.ref_name }}</code>
+        <b>URL erro:</b> <a href='https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}'>${link_action}</a>"
+        send_telegram_message "$message"
 
     - name: Capturar hora de término e calcular duração
       shell: bash
