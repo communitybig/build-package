@@ -778,11 +778,7 @@ runs:
       run: |
         # Function to send Telegram message
         source /tmp/send_telegram_message.sh
-
         link_action=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        MESSAGE="🚀 <b>build-package - WORKFLOW INICIADO</b>
-        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
-        <b>Job URL:</b> <a href='https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}'>${link_action}</a>
 
         message="🚨 <b>FALHA ao criar pacote:</b>
         <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
