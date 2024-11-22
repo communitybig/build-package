@@ -626,7 +626,7 @@ runs:
           file_size_bytes=$(stat -c%s "$i")
           file_size_kb=$((file_size_bytes / 1024))
 
-          message="📦 <b>build-package - Enviando pacote para o repositório</b>
+          message="📦 <b>build-package - 2/3 - Enviando pacote para o repositório</b>
           <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
           <b>Pacote:</b> <code>${pkgname_escaped}</code>
           <b>Tamanho bytes/kb:</b> <code>${file_size_bytes}/${file_size_kb}k</code>
@@ -806,7 +806,8 @@ runs:
         hours=$((duration / 3600))
         minutes=$(( (duration % 3600) / 60 ))
         seconds=$((duration % 60))
-        message="⏳ <b>build-package - JOB FINALIZADO EM:</b> <code>${hours}h ${minutes}m ${seconds}s</code>
+
+        message="⏳ <b>build-package - 3/3 - JOB FINALIZADO EM:</b> <code>${hours}h ${minutes}m ${seconds}s</code>
         <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
         <b>Inicio:</b> <code>${START_TIME}</code>
         <b>Fim   :</b> <code>${END_TIME}</code>"

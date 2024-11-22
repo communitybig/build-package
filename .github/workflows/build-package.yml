@@ -78,7 +78,7 @@ jobs:
           repo_origem="${{ inputs.url }}"
           link_action=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
 
-          MESSAGE="🚀 <b>build-package - WORKFLOW INICIADO</b>
+          MESSAGE="🚀 <b>build-package - 1/3 - WORKFLOW INICIADO</b>
           <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
           <b>Job URL:</b> <a href='https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}'>${link_action}</a>
           <b>Iniciado/Triggered por:</b> <code>$started_by_user/$triggered_by_user</code>
