@@ -635,11 +635,12 @@ runs:
 
           if rsync -vapz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/; then
             #message="✅ <b>build-package - Pacote enviado com sucesso para o repositório</b>"
+            #send_telegram_message "$message"
             :
           else
             message="❌ <b>build-package - Falha ao enviar o pacote para o repositorio</b>"
+            send_telegram_message "$message"
           fi
-          send_telegram_message "$message"
         done
 
         for i in *.sig *.md5; do
@@ -688,11 +689,12 @@ runs:
 
         if [ $? -eq 0 ]; then
           #message="✅ <b>build-package - Sincronização do banco de dados no repositório concluida com sucesso</b>"
+          #send_telegram_message "$message"
           :
         else
           message="❌ <b>build-package - Falha na sincronização do banco de dados no repositório</b>"
+          send_telegram_message "$message"
         fi
-        send_telegram_message "$message"
 
     # Keeps only the most recent package
     - name: Clean Old Packages
@@ -762,11 +764,12 @@ runs:
 
         if [ $? -eq 0 ]; then
           #message="✅ <b>build-package - Limpeza de pacotes antigos no repositório</b>"
+          #send_telegram_message "$message"
           :
         else
           message="❌ <b>Falha na limpeza de pacotes antigos no repositório</b>"
+          send_telegram_message "$message"
         fi
-        send_telegram_message "$message"
 
     # Send a Telegram alert if the build fails
     - name: Telegram Alert Fail
@@ -780,7 +783,6 @@ runs:
         MESSAGE="🚀 <b>build-package - WORKFLOW INICIADO</b>
         <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
         <b>Job URL:</b> <a href='https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}'>${link_action}</a>
-
 
         message="🚨 <b>FALHA ao criar pacote:</b>
         <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
