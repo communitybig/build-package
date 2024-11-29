@@ -209,13 +209,13 @@ runs:
       run: |
         # Configuração do ambiente de build
         # Atualiza o sistema e instala as dependências necessárias
-        sudo pacman -Syu --quiet --needed --noconfirm \
-          base-devel \
-          cmake \
-          libarchive \
-          meson \
-          ninja \
-          yay
+        sudo pacman -Syu --quiet --needed --noconfirm
+          #base-devel \
+          #cmake \
+          #libarchive \
+          #meson \
+          #ninja \
+          #yay
 
         # Verifica as versões instaladas
         meson --version
@@ -387,33 +387,43 @@ runs:
           # Extract dependencies from PKGBUILD
           source PKGBUILD
 
-          # Install all dependencies using yay
-          install_dependencies() {
-              if [ -n "$depends" ] || [ -n "$makedepends" ]; then
-                  echo "Installing all dependencies..."
-                  yay -Sy --asdeps --needed --noanswerdiff --noconfirm "${depends[@]}" "${makedepends[@]}" || {
-                      echo "Error installing dependencies"
-                      return 1
-                  }
-              fi
-              return 0
-          }
-
-          # Call the installation function
-          if ! install_dependencies; then
-              echo "Failed to install dependencies"
-              exit 1
+          # Instala dependências usando yay com tratamento de erro mais robusto
+          if [ -n "$depends" ] || [ -n "$makedepends" ]; then
+            echo "Instalando dependências..."
+            {
+              # Primeiro tenta instalar todas as dependências de uma vez
+              yay -Sy --needed --noconfirm "${depends[@]}" "${makedepends[@]}"
+            } || {
+              echo "Falha na instalação em massa. Tentando instalar dependências individualmente..."
+              
+              # Se falhar, tenta instalar cada dependência individualmente
+              for dep in "${depends[@]}"; do
+                echo "Instalando dependência: $dep"
+                yay -Sy --needed --noconfirm "$dep" || echo "Aviso: Falha ao instalar dependência: $dep"
+              done
+              
+              for dep in "${makedepends[@]}"; do
+                echo "Instalando dependência de compilação: $dep"
+                yay -Sy --needed --noconfirm "$dep" || echo "Aviso: Falha ao instalar dependência de compilação: $dep"
+              done
+            }
           fi
-
-          # Build the package without installing
-          echo "Building AUR package: ${{ inputs.package_name }}"
-          makepkg -s --noconfirm --noprogressbar --nodeps --skipchecksums
-
-          # Move the compiled package to /home/packages
-          mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
-
-          echo "Build completed. Checking /home/packages:"
-          ls -la /home/packages
+          
+          # Build do pacote com tratamento de erro melhorado
+          echo "Iniciando build do pacote..."
+          if ! makepkg -sf --noconfirm --needed; then
+            echo "Falha no build inicial. Tentando novamente com --skipinteg..."
+            if ! makepkg -sf --noconfirm --needed --skipinteg; then
+              echo "Erro crítico no build do pacote"
+              exit 1
+            fi
+          fi
+          
+          # Move o pacote compilado
+          if ! mv *.pkg.tar.zst /home/packages/ 2>/dev/null; then
+            echo "Erro: Nenhum pacote foi gerado"
+            exit 1
+          fi
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
