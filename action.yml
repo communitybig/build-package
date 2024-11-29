@@ -381,7 +381,8 @@ runs:
           sudo chown -R builduser:builduser .
           
           # Usar yay para construir o pacote sem instalar
-          yay -S ${{ inputs.package_name }} --noconfirm --buildonly
+          #yay -S ${{ inputs.package_name }} --noconfirm --buildonly
+          yay -B --noconfirm
 
           # Move o pacote compilado
           mv *.pkg.tar.zst /home/packages/ 2>/dev/null || {
