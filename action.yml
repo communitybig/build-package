@@ -119,21 +119,21 @@ runs:
       shell: bash
       run: |
         # Definindo variáveis de cores
-        green="\033[01;32m"
-        red="\033[01;31m"
-        blue="\033[01;34m"
-        cyan="\033[01;36m"
-        pink="\033[01;35m"
-        yellow="\033[01;33m"
-        std="\033[0m"
+        GREEN="\033[01;32m"
+        RED="\033[01;31m"
+        BLUE="\033[01;34m"
+        CYAN="\033[01;36m"
+        PINK="\033[01;35m"
+        YELLOW="\033[01;33m"
+        RESET="\033[0m"
 
         # Usando as variáveis de cores com printf
-        printf "${green}Este é um texto em verde!${std}\n"
-        printf "${red}Este é um texto em vermelho!${std}\n"
-        printf "${blue}Este é um texto em azul!${std}\n"
-        printf "${cyan}Este é um texto em ciano!${std}\n"
-        printf "${pink}Este é um texto em rosa!${std}\n"
-        printf "${yellow}Este é um texto em amarelo!${std}\n"
+        printf "${GREEN}Este é um texto em verde!${RESET}\n"
+        printf "${RED}Este é um texto em vermelho!${RESET}\n"
+        printf "${BLUE}Este é um texto em azul!${RESET}\n"
+        printf "${CYAN}Este é um texto em ciano!${RESET}\n"
+        printf "${PINK}Este é um texto em rosa!${RESET}\n"
+        printf "${YELLOW}Este é um texto em amarelo!${RESET}\n"
 
     - name: Definir função send_telegram_message
       shell: bash
@@ -209,13 +209,13 @@ runs:
       run: |
         # Configuração do ambiente de build
         # Atualiza o sistema e instala as dependências necessárias
-        sudo pacman -Syu --quiet --needed --noconfirm
-          #base-devel \
-          #cmake \
-          #libarchive \
-          #meson \
-          #ninja \
-          #yay
+        sudo pacman -Syu --quiet --needed --noconfirm \
+          base-devel \
+          cmake \
+          libarchive \
+          meson \
+          ninja \
+          yay
 
         # Verifica as versões instaladas
         meson --version
@@ -372,24 +372,48 @@ runs:
         if [ "${{ inputs.build_env }}" == "aur" ]; then
           # For packages AUR
           cd ${{ inputs.aur_package_dir }}
-          echo "${blue}Construindo pacote AUR:${std} ${yellow}${{ inputs.package_name }}${std}"
+          echo "Construindo pacote AUR: ${{ inputs.package_name }}"
           echo "Current AUR package directory: $(pwd)"
           echo "AUR package directory contents:"
           ls -la
 
           # Give permissions to builduser for the current directory
           sudo chown -R builduser:builduser .
-          
-          # Usar yay para construir o pacote sem instalar
-          #yay -S ${{ inputs.package_name }} --noconfirm --buildonly
-          yay -B --noconfirm
 
-          # Move o pacote compilado
-          mv *.pkg.tar.zst /home/packages/ 2>/dev/null || {
-            echo "Erro: Nenhum pacote foi gerado"
-            exit 1
+          # Create temporary directory for makepkg
+          sudo mkdir -p /tmp/makepkg
+          sudo chown builduser:builduser /tmp/makepkg
+
+          # Extract dependencies from PKGBUILD
+          source PKGBUILD
+
+          # Install all dependencies using yay
+          install_dependencies() {
+              if [ -n "$depends" ] || [ -n "$makedepends" ]; then
+                  echo "Installing all dependencies..."
+                  yay -Sy --asdeps --needed --noanswerdiff --noconfirm "${depends[@]}" "${makedepends[@]}" || {
+                      echo "Error installing dependencies"
+                      return 1
+                  }
+              fi
+              return 0
           }
-        fi
+
+          # Call the installation function
+          if ! install_dependencies; then
+              echo "Failed to install dependencies"
+              exit 1
+          fi
+
+          # Build the package without installing
+          echo "Building AUR package: ${{ inputs.package_name }}"
+          makepkg -s --noconfirm --noprogressbar --nodeps --skipchecksums
+
+          # Move the compiled package to /home/packages
+          mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
+
+          echo "Build completed. Checking /home/packages:"
+          ls -la /home/packages
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
