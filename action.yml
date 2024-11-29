@@ -119,21 +119,21 @@ runs:
       shell: bash
       run: |
         # Definindo variáveis de cores
-        GREEN="\033[01;32m"
-        RED="\033[01;31m"
-        BLUE="\033[01;34m"
-        CYAN="\033[01;36m"
-        PINK="\033[01;35m"
-        YELLOW="\033[01;33m"
-        RESET="\033[0m"
+        green="\033[01;32m"
+        red="\033[01;31m"
+        blue="\033[01;34m"
+        cyan="\033[01;36m"
+        pink="\033[01;35m"
+        yellow="\033[01;33m"
+        std="\033[0m"
 
         # Usando as variáveis de cores com printf
-        printf "${GREEN}Este é um texto em verde!${RESET}\n"
-        printf "${RED}Este é um texto em vermelho!${RESET}\n"
-        printf "${BLUE}Este é um texto em azul!${RESET}\n"
-        printf "${CYAN}Este é um texto em ciano!${RESET}\n"
-        printf "${PINK}Este é um texto em rosa!${RESET}\n"
-        printf "${YELLOW}Este é um texto em amarelo!${RESET}\n"
+        printf "${green}Este é um texto em verde!${std}\n"
+        printf "${red}Este é um texto em vermelho!${std}\n"
+        printf "${blue}Este é um texto em azul!${std}\n"
+        printf "${cyan}Este é um texto em ciano!${std}\n"
+        printf "${pink}Este é um texto em rosa!${std}\n"
+        printf "${yellow}Este é um texto em amarelo!${std}\n"
 
     - name: Definir função send_telegram_message
       shell: bash
@@ -372,61 +372,23 @@ runs:
         if [ "${{ inputs.build_env }}" == "aur" ]; then
           # For packages AUR
           cd ${{ inputs.aur_package_dir }}
-          echo "Construindo pacote AUR: ${{ inputs.package_name }}"
+          echo "${blue}Construindo pacote AUR:${std} ${yellow}${{ inputs.package_name }}${std}"
           echo "Current AUR package directory: $(pwd)"
           echo "AUR package directory contents:"
           ls -la
 
           # Give permissions to builduser for the current directory
           sudo chown -R builduser:builduser .
-
-          # Create temporary directory for makepkg
-          sudo mkdir -p /tmp/makepkg
-          sudo chown builduser:builduser /tmp/makepkg
-
-          # Extract dependencies from PKGBUILD
-          source PKGBUILD
           
-          # Configura PKG_CONFIG_PATH
-          export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
+          # Usar yay para construir o pacote sem instalar
+          yay -S ${{ inputs.package_name }} --noconfirm --buildonly
 
-          # Instala dependências usando yay com tratamento de erro mais robusto
-          if [ -n "$depends" ] || [ -n "$makedepends" ]; then
-            echo "Instalando dependências..."
-            {
-              # Primeiro tenta instalar todas as dependências de uma vez
-              yay -Sy --needed --noconfirm "${depends[@]}" "${makedepends[@]}"
-            } || {
-              echo "Falha na instalação em massa. Tentando instalar dependências individualmente..."
-              
-              # Se falhar, tenta instalar cada dependência individualmente
-              for dep in "${depends[@]}"; do
-                echo "Instalando dependência: $dep"
-                yay -Sy --needed --noconfirm "$dep" || echo "Aviso: Falha ao instalar dependência: $dep"
-              done
-              
-              for dep in "${makedepends[@]}"; do
-                echo "Instalando dependência de compilação: $dep"
-                yay -Sy --needed --noconfirm "$dep" || echo "Aviso: Falha ao instalar dependência de compilação: $dep"
-              done
-            }
-          fi
-          
-          # Build do pacote com tratamento de erro melhorado
-          echo "Iniciando build do pacote..."
-          if ! makepkg -sf --noconfirm --needed; then
-            echo "Falha no build inicial. Tentando novamente com --skipinteg..."
-            if ! makepkg -sf --noconfirm --needed --skipinteg; then
-              echo "Erro crítico no build do pacote"
-              exit 1
-            fi
-          fi
-          
           # Move o pacote compilado
-          if ! mv *.pkg.tar.zst /home/packages/ 2>/dev/null; then
+          mv *.pkg.tar.zst /home/packages/ 2>/dev/null || {
             echo "Erro: Nenhum pacote foi gerado"
             exit 1
-          fi
+          }
+        fi
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
