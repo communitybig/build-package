@@ -386,6 +386,9 @@ runs:
 
           # Extract dependencies from PKGBUILD
           source PKGBUILD
+          
+          # Configura PKG_CONFIG_PATH
+          export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
 
           # Instala dependências usando yay com tratamento de erro mais robusto
           if [ -n "$depends" ] || [ -n "$makedepends" ]; then
