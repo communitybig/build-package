@@ -114,54 +114,35 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Definindo variáveis de cores
-      id: define_colors
-      shell: bash
-      run: |
-        # Definindo variáveis de cores
-        GREEN="\033[01;32m"
-        RED="\033[01;31m"
-        BLUE="\033[01;34m"
-        CYAN="\033[01;36m"
-        PINK="\033[01;35m"
-        YELLOW="\033[01;33m"
-        RESET="\033[0m"
-
-        # Usando as variáveis de cores com printf
-        printf "${GREEN}Este é um texto em verde!${RESET}\n"
-        printf "${RED}Este é um texto em vermelho!${RESET}\n"
-        printf "${BLUE}Este é um texto em azul!${RESET}\n"
-        printf "${CYAN}Este é um texto em ciano!${RESET}\n"
-        printf "${PINK}Este é um texto em rosa!${RESET}\n"
-        printf "${YELLOW}Este é um texto em amarelo!${RESET}\n"
-
-    - name: Definir função send_telegram_message
+    - name: Define the function send_telegram_message
       shell: bash
       env:
         TELEGRAM_TOKEN: "${{ inputs.telegram_token }}"
         TELEGRAM_CHAT_ID: "${{ inputs.telegram_chat_id }}"
       run: |
-        # Definir a função send_telegram_message no script temporário
+        # Define the function send_telegram_message in the temporary script
         cat << 'EOF' > /tmp/send_telegram_message.sh
-        # Definindo variáveis de cores
+
+        # Defining color variables
+        export bold="\033[1m"
         export green="\033[01;32m"
         export red="\033[01;31m"
         export blue="\033[01;34m"
         export cyan="\033[01;36m"
         export pink="\033[01;35m"
         export yellow="\033[01;33m"
-        export reset="\033[0m"
-
+        export std="\033[0m"
+        
         send_telegram_message() {
           local message="$1"
           local parse_mode="$2"
 
-          # Define parse_mode como "MarkdownV2" se não for especificado
+          # Define parse_mode as "MarkdownV2" if not specified
           [[ -z $parse_mode ]] && parse_mode="HTML"
 
-          # Remove as tags HTML e exibe o resultado no terminal
+          # Remove the HTML tags and display the result in the terminal
           echo -e "${red}$(sed 's/<[^>]*>//g' <<< "$message")${reset}"
-          # Envia a mensagem original com HTML para o Telegram
+          # Send the original message with HTML to Telegram
           curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
             -d chat_id="${{ inputs.telegram_chat_id }}" \
             -d text="$message" \
@@ -169,7 +150,7 @@ runs:
         }
         EOF
 
-    - name: Inicializando criação de pacote
+    - name: Initializing package creation
       shell: bash
       run: |
         # Function to send Telegram message
@@ -196,12 +177,12 @@ runs:
       shell: bash
       run: |
         # Debug Inputs
-        echo "DEBUG: All inputs"
-        echo "${{ toJson(inputs) }}"
-        echo "DEBUG: build_env from input: ${{ inputs.build_env }}"
-        echo "DEBUG: build_env from env: $DEBUG_BUILD_ENV"
-        echo "DEBUG: tmate input: ${{ inputs.tmate }}"
-        echo "DEBUG: All env variables"
+        echo -e "${bold}DEBUG:${std} All inputs"
+        echo -e "${blue}${{ toJson(inputs) }}${std}"
+        echo -e "${bold}DEBUG:${std} build_env from input: ${{ inputs.build_env }}"
+        echo -e "${bold}DEBUG:${std} build_env from env: $DEBUG_BUILD_ENV"
+        echo -e "${bold}DEBUG:${std} tmate input: ${{ inputs.tmate }}"
+        echo -e "${bold}DEBUG:${std} All env variables"
         env | sort
 
     - name: Setup build environment
@@ -209,13 +190,13 @@ runs:
       run: |
         # Configuração do ambiente de build
         # Atualiza o sistema e instala as dependências necessárias
-        sudo pacman -Syu --quiet --needed --noconfirm \
-          base-devel \
-          cmake \
-          libarchive \
-          meson \
-          ninja \
-          yay
+        sudo pacman -Syu --quiet --needed --noconfirm
+          #base-devel \
+          #cmake \
+          #libarchive \
+          #meson \
+          #ninja \
+          #yay
 
         # Verifica as versões instaladas
         meson --version
@@ -350,6 +331,7 @@ runs:
     - name: Build package
       shell: bash
       run: |
+        source /tmp/send_telegram_message.sh
         set -ex  # Isso fará o script falhar se qualquer comando falhar
         # Debug: Mostrar ambiente de build
         echo "Build environment: ${{ inputs.build_env }}"
