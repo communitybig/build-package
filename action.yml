@@ -114,27 +114,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Defining color variables
-      id: define_colors
-      shell: bash
-      run: |
-        # Defining color variables
-        export bold="\033[1m"
-        export green="\033[01;32m"
-        export red="\033[01;31m"
-        export blue="\033[01;34m"
-        export cyan="\033[01;36m"
-        export pink="\033[01;35m"
-        export yellow="\033[01;33m"
-        export std="\033[0m"
-
-        echo -e "${green}This is a text in green!${std}\n"
-        echo -e "${red}This is a text in red!${std}\n"
-        echo -e "${blue}This is a text in blue!${std}\n"
-        echo -e "${cyan}This is a text in cyan!${std}\n"
-        echo -e "${pink}This is a text in pink!${std}\n"
-        echo -e "${yellow}This is a text in yellow!${std}\n"
-
     - name: Define the function send_telegram_message
       shell: bash
       env:
@@ -144,6 +123,16 @@ runs:
         # Define the function send_telegram_message in the temporary script
         cat << 'EOF' > /tmp/send_telegram_message.sh
 
+        # Defining color variables
+        export bold="\033[1m"
+        export green="\033[01;32m"
+        export red="\033[01;31m"
+        export blue="\033[01;34m"
+        export cyan="\033[01;36m"
+        export pink="\033[01;35m"
+        export yellow="\033[01;33m"
+        export std="\033[0m"
+        
         send_telegram_message() {
           local message="$1"
           local parse_mode="$2"
@@ -342,6 +331,7 @@ runs:
     - name: Build package
       shell: bash
       run: |
+        source /tmp/send_telegram_message.sh
         set -ex  # Isso fará o script falhar se qualquer comando falhar
         # Debug: Mostrar ambiente de build
         echo "Build environment: ${{ inputs.build_env }}"
