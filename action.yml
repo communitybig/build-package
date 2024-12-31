@@ -190,13 +190,7 @@ runs:
       run: |
         # Configuração do ambiente de build
         # Atualiza o sistema e instala as dependências necessárias
-        sudo pacman -Syu --quiet --needed --noconfirm
-          #base-devel \
-          #cmake \
-          #libarchive \
-          #meson \
-          #ninja \
-          #yay
+        sudo pacman -Syu --ignore=community-livecd-key,biglinux-livecd-key --quiet --needed --noconfirm
 
         # Verifica as versões instaladas
         meson --version
