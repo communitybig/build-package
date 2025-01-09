@@ -369,22 +369,25 @@ runs:
 
           # Detectar e importar chaves GPG necessárias
           if [ -f "PKGBUILD" ]; then
-            echo "Verificando chaves PGP necessárias..."
+            echo "Checking required PGP keys..."
             key=$(grep "validpgpkeys" PKGBUILD | sed 's/.*(\"\(.*\)\")/\1/')
             
             if [ ! -z "$key" ]; then
-              echo "Importando chave GPG: $key"
+              echo "Importing GPG key: $key"
               gpg --keyserver keyserver.ubuntu.com --recv-keys "$key" || \
               gpg --keyserver keys.gnupg.net --recv-keys "$key" || \
               gpg --keyserver hkp://pgp.mit.edu --recv-keys "$key" || \
-              echo "Aviso: Não foi possível importar a chave $key"
+              echo "Warning: Unable to import key $key"
             else
-              echo "Nenhuma chave PGP encontrada no PKGBUILD"
+              echo "No PGP key found in the PKGBUILD"
             fi
           fi
 
           # Extract dependencies from PKGBUILD
           source PKGBUILD
+          echo "Debug: Loading dependencies from the PKGBUILD..."
+          echo "depends: ${depends[@]}"
+          echo "makedepends: ${makedepends[@]}"
 
           # Install all dependencies using yay
           install_dependencies() {
