@@ -360,21 +360,24 @@ runs:
           sudo mkdir -p /tmp/makepkg
           sudo chown builduser:builduser /tmp/makepkg
 
-          # Detectar e importar chaves GPG necessárias automaticamente do PKGBUILD
+          # Verificar ambiente de compilação
+          echo "Verificando ambiente de compilação..."
+          gcc --version
+          meson --version
+          ninja --version
+          pkg-config --version
+
+          # Detectar e importar chaves GPG necessárias
           if [ -f "PKGBUILD" ]; then
             echo "Verificando chaves PGP necessárias..."
-            # Extrair as chaves necessárias do PKGBUILD
-            mapfile -t validpgpkeys < <(grep "validpgpkeys=" PKGBUILD | sed -e 's/validpgpkeys=(//' -e 's/)//' -e 's/["\047 ]//g' -e 's/'\''//' -e 's/,/\n/g')
+            key=$(grep "validpgpkeys" PKGBUILD | sed 's/.*(\"\(.*\)\")/\1/')
             
-            if [ ${#validpgpkeys[@]} -gt 0 ]; then
-              echo "Encontrada(s) ${#validpgpkeys[@]} chave(s) PGP para importar"
-              for key in "${validpgpkeys[@]}"; do
-                echo "Importando chave: $key"
-                gpg --keyserver keyserver.ubuntu.com --recv-keys "$key" || \
-                gpg --keyserver keys.gnupg.net --recv-keys "$key" || \
-                gpg --keyserver hkp://pgp.mit.edu --recv-keys "$key" || \
-                echo "Aviso: Não foi possível importar a chave $key"
-              done
+            if [ ! -z "$key" ]; then
+              echo "Importando chave GPG: $key"
+              gpg --keyserver keyserver.ubuntu.com --recv-keys "$key" || \
+              gpg --keyserver keys.gnupg.net --recv-keys "$key" || \
+              gpg --keyserver hkp://pgp.mit.edu --recv-keys "$key" || \
+              echo "Aviso: Não foi possível importar a chave $key"
             else
               echo "Nenhuma chave PGP encontrada no PKGBUILD"
             fi
@@ -403,7 +406,7 @@ runs:
 
           # Build the package without installing
           echo "Building AUR package: ${{ inputs.package_name }}"
-          makepkg -s --noconfirm --noprogressbar --nodeps --skipchecksums
+          makepkg -s --noconfirm --noprogressbar --nodeps
 
           # Move the compiled package to /home/packages
           mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
