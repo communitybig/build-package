@@ -103,76 +103,95 @@ inputs:
     description: "Directory containing the AUR package"
     required: false
     default: "."
+  start_time:
+    description: "Hora de início do workflow"
+    required: false
+  start_timestamp:
+    description: "Timestamp de início do workflow"
+    required: false
 
 # Definição dos passos da ação
 runs:
   using: "composite"
   steps:
-    - name: Define color variables
-      id: define_colors
+    - name: Define the function send_telegram_message
       shell: bash
+      env:
+        TELEGRAM_TOKEN: "${{ inputs.telegram_token }}"
+        TELEGRAM_CHAT_ID: "${{ inputs.telegram_chat_id }}"
       run: |
-        # Definindo variáveis de cores
-        GREEN="\033[01;32m"
-        RED="\033[01;31m"
-        BLUE="\033[01;34m"
-        CYAN="\033[01;36m"
-        PINK="\033[01;35m"
-        YELLOW="\033[01;33m"
-        RESET="\033[0m"
+        # Define the function send_telegram_message in the temporary script
+        cat << 'EOF' > /tmp/send_telegram_message.sh
 
-        # Usando as variáveis de cores com printf
-        printf "${GREEN}Este é um texto em verde!${RESET}\n"
-        printf "${RED}Este é um texto em vermelho!${RESET}\n"
-        printf "${BLUE}Este é um texto em azul!${RESET}\n"
-        printf "${CYAN}Este é um texto em ciano!${RESET}\n"
-        printf "${PINK}Este é um texto em rosa!${RESET}\n"
-        printf "${YELLOW}Este é um texto em amarelo!${RESET}\n"
+        # Defining color variables
+        export bold="\033[1m"
+        export green="\033[01;32m"
+        export red="\033[01;31m"
+        export blue="\033[01;34m"
+        export cyan="\033[01;36m"
+        export pink="\033[01;35m"
+        export yellow="\033[01;33m"
+        export std="\033[0m"
+        
+        send_telegram_message() {
+          local message="$1"
+          local parse_mode="$2"
 
-    - name: Inicializando criação de pacote
+          # Define parse_mode as "MarkdownV2" if not specified
+          [[ -z $parse_mode ]] && parse_mode="HTML"
+
+          # Remove the HTML tags and display the result in the terminal
+          echo -e "${red}$(sed 's/<[^>]*>//g' <<< "$message")${reset}"
+          # Send the original message with HTML to Telegram
+          curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
+            -d chat_id="${{ inputs.telegram_chat_id }}" \
+            -d text="$message" \
+            -d parse_mode="$parse_mode"
+        }
+        EOF
+
+    - name: Initializing package creation
       shell: bash
       run: |
         # Function to send Telegram message
-        send_telegram_message() {
-          message="$1"
-          curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
-            -d chat_id="${{ inputs.telegram_chat_id }}" \
-            -d text="$message"\
-            -d parse_mode="MarkdownV2"
-        }
+        source /tmp/send_telegram_message.sh
+
         pkgname="${{ inputs.package_name }}"
         branch="${{ inputs.branch_type }}"
         repositorio="${{ inputs.repo_dir }}"
-        pkgname_escaped=$(echo "$pkgname" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-        branch_escaped=$(echo "${branch^^}" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-        send_telegram_message "⭐ **\Iniciando criação de pacote**%0A"\
-        "**Nome:** \`$pkgname_escaped\`%0A"\
-        "**Repositório:** \`$branch_escaped\`"
+        repo_origem="${{ inputs.url }}"
+        #https://docs.github.com/pt/enterprise-server@3.10/actions/writing-workflows/choosing-what-your-workflow-does/accessing-contextual-information-about-workflow-runs
+        started_by_user="${{ github.actor }}"
+        triggered_by_user="${{ github.triggering_actor }}"
+        pkgname_escaped=$(echo "$pkgname" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+        branch_escaped=$(echo "${branch^^}" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+
+        message="⭐️ <b>build-package - Iniciando criação de pacote</b>
+        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+        <b>Nome:</b> <code>$pkgname_escaped</code>
+        <b>Origem:</b> <code>${repo_origem}</code>
+        <b>Repositório:</b> <code>$branch_escaped</code>"
+        #send_telegram_message "$message"
 
     - name: Debug Inputs
       shell: bash
       run: |
-        echo "DEBUG: All inputs"
-        echo "${{ toJson(inputs) }}"
-        echo "DEBUG: build_env from input: ${{ inputs.build_env }}"
-        echo "DEBUG: build_env from env: $DEBUG_BUILD_ENV"
-        echo "DEBUG: tmate input: ${{ inputs.tmate }}"
-        echo "DEBUG: All env variables"
+        # Debug Inputs
+        echo -e "${bold}DEBUG:${std} All inputs"
+        echo -e "${blue}${{ toJson(inputs) }}${std}"
+        echo -e "${bold}DEBUG:${std} build_env from input: ${{ inputs.build_env }}"
+        echo -e "${bold}DEBUG:${std} build_env from env: $DEBUG_BUILD_ENV"
+        echo -e "${bold}DEBUG:${std} tmate input: ${{ inputs.tmate }}"
+        echo -e "${bold}DEBUG:${std} All env variables"
         env | sort
 
-    # Configuração do ambiente de build
     - name: Setup build environment
       shell: bash
       run: |
+        # Configuração do ambiente de build
         # Atualiza o sistema e instala as dependências necessárias
-        sudo pacman -Syu --quiet --needed --noconfirm \
-          base-devel \
-          cmake \
-          libarchive \
-          meson \
-          ninja \
-          yay
-          
+        sudo pacman -Syu --ignore=community-livecd-key,biglinux-livecd-key --quiet --needed --noconfirm
+
         # Verifica as versões instaladas
         meson --version
         ninja --version
@@ -187,8 +206,8 @@ runs:
         echo "DEBUG: BRANCH_TYPE: $BRANCH_TYPE"
 
         # Set up pacman mirror
-          echo "Usando mirror especificado: ${{ inputs.pacman_mirror }}"
-          echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
+        echo "Usando mirror especificado: ${{ inputs.pacman_mirror }}"
+        echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
 
         # Remove existing BigLinux repositories
         sudo sed -i '/biglinux/,$d' /etc/pacman.conf
@@ -199,19 +218,19 @@ runs:
           [community-testing]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/testing/$arch
-          
+
           [community-stable]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/stable/$arch
-          
+
           [community-extra]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/extra/$arch
-          
+
           [biglinux-testing]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/testing/$arch
-          
+
           [biglinux-stable]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
@@ -225,11 +244,11 @@ runs:
           [community-stable]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/stable/$arch
-          
+
           [community-extra]
           SigLevel = PackageRequired
           Server = https://repo.communitybig.org/extra/$arch
-          
+
           [biglinux-stable]
           SigLevel = PackageRequired
           Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
@@ -239,13 +258,13 @@ runs:
           sudo sed -i 's/^#MAKEFLAGS="-j2"/MAKEFLAGS="-j$(nproc)"/' /etc/makepkg.conf
           sudo sed -i 's/^#BUILDDIR/BUILDDIR/' /etc/makepkg.conf
           sudo sed -i 's/^#PKGDEST/PKGDEST/' /etc/makepkg.conf
-          
+
           # Habilitar o repositório multilib (necessário para alguns pacotes AUR)
           sudo sed -i '/\[multilib\]/,/Include/s/^#//' /etc/pacman.conf
-          
+
           # Atualizar os repositórios após as mudanças
           sudo pacman -Sy
-          
+
           # Instalar dependências comumente necessárias para builds AUR
           sudo pacman -S --needed base-devel git --noconfirm
         else
@@ -261,10 +280,10 @@ runs:
         sudo sed -i 's|https://repo.manjaro.org/repo|https://nnenix.mm.fcix.net/manjaro|' /usr/lib/manjaro-chrootbuild/util.sh
         sudo sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
 
-    # Download the source code
     - name: Download Source
       shell: bash
       run: |
+        # Download the source code
         if [ "${{ inputs.build_env }}" == "aur" ]; then
           echo "Cloning AUR package from ${{ inputs.url }}"
           git clone ${{ inputs.url }} aur_package
@@ -306,6 +325,7 @@ runs:
     - name: Build package
       shell: bash
       run: |
+        source /tmp/send_telegram_message.sh
         set -ex  # Isso fará o script falhar se qualquer comando falhar
         # Debug: Mostrar ambiente de build
         echo "Build environment: ${{ inputs.build_env }}"
@@ -374,10 +394,10 @@ runs:
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
           cd $gitfolder
-          
+
           # Ensure architecture is set to x86_64
           sed -i "/^arch=/c\arch=('x86_64')" PKGBUILD
-          
+
           # Build for x86_64
           echo -e "\033[01;31mBuild x86_64\033[0m"
           # Determinar o branch de build
@@ -388,7 +408,7 @@ runs:
             #build_branch="${{ inputs.branch_type }}"
             build_branch="stable"
           fi
-          
+
           # Executar chrootbuild com o branch determinado
           sudo chrootbuild -H -p . -b ${build_branch}
         fi
@@ -427,6 +447,7 @@ runs:
           cd "$gitfolder"
         fi
 
+        ls -lah
         # Assina todos os pacotes encontrados
         for p in $(find $PWD -maxdepth 1 -regex '.*\.pkg\.tar\.\(xz\|zst\)'); do
           if [ -f "$p" ]; then
@@ -537,7 +558,7 @@ runs:
         LANG: en_US.UTF-8
         LC_ALL: en_US.UTF-8
       run: |
-        # Set up SSH
+        # Setup SSH
         mkdir -p /home/builduser/.ssh
         ssh-keyscan -t rsa -p ${{ inputs.repo_port }} ${{ inputs.repo_host }} >> /home/builduser/.ssh/known_hosts
         ip=${{ inputs.repo_host }}
@@ -550,13 +571,13 @@ runs:
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
           cd $gitfolder
-          
+
           # Determine the last committer (apenas para pacotes não-AUR)
           lastCommit=$(git log -1 --format="%an <%ae>")
           if [ "$(grep github-actions <<< $lastCommit)" ];then
             lastCommit=$(git log -2 --format="%an <%ae>")
           fi
-          
+
           # Set the branch based on BRANCH_TYPE
           if [ "${{ inputs.branch_type }}" == "stable" ]; then
             branch="STABLE"
@@ -570,30 +591,34 @@ runs:
         ls -lh
 
         # Function to send Telegram message
-        send_telegram_message() {
-          message="$1"
-          curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
-            -d chat_id="${{ inputs.telegram_chat_id }}" \
-            -d text="$message"\
-            -d parse_mode="MarkdownV2"
-        }
+        source /tmp/send_telegram_message.sh
 
         # Upload the package files
         for i in *.pkg.tar.zst; do
-          pkgname=$(basename $i)
-          
-          pkgname_escaped=$(echo "$pkgname" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-          branch_escaped=$(echo "$branch" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-          
-          echo "📦 Pacote $pkgname sendo enviado para o repositório 🚀 $branch 🎯"
-          send_telegram_message "📦 **Pacote** \`$pkgname_escaped\` **sendo enviado para o repositório** 🚀 \`$branch_escaped\`🎯"
-          rsync -vapz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/
-          if [ $? -eq 0 ]; then
-            send_telegram_message "✅ **Pacote** \`$pkgname_escaped\` **enviado com sucesso para o repositório** \`$branch_escaped\`"
+          pkgname=$(basename "$i")
+          pkgname_escaped=$(echo "$pkgname" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+          branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+          repositorio="${{ inputs.repo_dir }}"
+          file_size_bytes=$(stat -c%s "$i")
+          file_size_kb=$((file_size_bytes / 1024))
+
+          message="✅ <b>build-package - 2/3 - ENVIANDO 📦 PARA O REPOSITÓRIO</b>
+          <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+          <b>Pacote:</b> <code>${pkgname_escaped}</code>
+          <b>Tamanho bytes/kb:</b> <code>${file_size_bytes}/${file_size_kb}k</code>
+          <b>Repositório:</b> <code>${branch_escaped}</code>"
+          send_telegram_message "$message"
+
+          if rsync -vapz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/; then
+            #message="✅ <b>build-package - Pacote enviado com sucesso para o repositório</b>"
+            #send_telegram_message "$message"
+            :
           else
-            send_telegram_message "❌ **Falha ao enviar o pacote** \`$pkgname_escaped\` **para o repositório** \`$branch_escaped\`"
+            message="❌ <b>build-package - Falha ao enviar o pacote para o repositorio</b>"
+            send_telegram_message "$message"
           fi
         done
+
         for i in *.sig *.md5; do
           rsync -vapz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/
         done
@@ -604,13 +629,7 @@ runs:
       shell: bash
       run: |
         # Function to send Telegram message
-        send_telegram_message() {
-          message="$1"
-          curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
-            -d chat_id="${{ inputs.telegram_chat_id }}" \
-            -d text="$message" \
-            -d parse_mode="MarkdownV2"
-        }
+        source /tmp/send_telegram_message.sh
 
         # Determine the database name based on the branch type
         if [ "${{ inputs.branch_type }}" == "stable" ]; then
@@ -623,34 +642,34 @@ runs:
           branch="TESTING"
           db_name="community-testing"
         else
-          echo "Error: Unknown branch type: ${{ inputs.branch_type }}"
+          echo "${red}Error: Unknown branch type: ${{ inputs.branch_type }} ${reset}"
           exit 1
         fi
 
         echo "Branch: $branch"
         echo "Database name: $db_name"
+        branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+        db_name_escaped=$(echo "$db_name" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-        branch_escaped=$(echo "$branch" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-        db_name_escaped=$(echo "$db_name" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-
-        echo "🔄 Sincronizando o banco de dados do repositório $branch..."
-        send_telegram_message "🔄 **Iniciando sincronização do banco de dados do repositório** \`$branch_escaped\`"
+        #message="🔄 <b>build-package - Iniciando sincronização do banco de dados no repositório</b>"
+        #send_telegram_message "$message"
 
         ssh -v ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
           repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
           exit_code=\$?
-          echo "Comando repo-add concluído com código de saída: \$exit_code"
+          echo -e "${red}Comando repo-add concluído com código de saída: \$exit_code ${reset}"
           exit \$exit_code
         EOF
 
         if [ $? -eq 0 ]; then
-          echo "✅ Sincronização do banco de dados concluída com sucesso!"
-          send_telegram_message "✅ **Sincronização do banco de dados do repositório** \`$branch_escaped\` **concluída com sucesso\!**"
+          #message="✅ <b>build-package - Sincronização do banco de dados no repositório concluida com sucesso</b>"
+          #send_telegram_message "$message"
+          :
         else
-          echo "❌ Falha na sincronização do banco de dados."
-          send_telegram_message "❌ **Falha na sincronização do banco de dados do repositório** \`$branch_escaped\`\."
+          message="❌ <b>build-package - Falha na sincronização do banco de dados no repositório</b>"
+          send_telegram_message "$message"
         fi
 
     # Keeps only the most recent package
@@ -659,13 +678,7 @@ runs:
       shell: bash
       run: |
         # Function to send Telegram message
-        send_telegram_message() {
-          message="$1"
-          curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
-            -d chat_id="${{ inputs.telegram_chat_id }}" \
-            -d text="$message" \
-            -d parse_mode="MarkdownV2"
-        }
+        source /tmp/send_telegram_message.sh
 
         # Determine the branch based on the branch type
         if [ "${{ inputs.branch_type }}" == "stable" ]; then
@@ -678,38 +691,39 @@ runs:
           branch="TESTING"
           db_name="community-testing"
         else
-          echo "Error: Unknown branch type: ${{ inputs.branch_type }}"
+          message="❌ <b>Error: Unknown branch type</b>
+          <code>${{ inputs.branch_type }}"
+          send_telegram_message "$message"
           exit 1
         fi
 
         echo "Branch: $branch"
         echo "Database name: $db_name"
+        branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-        branch_escaped=$(echo "$branch" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-
-        echo "🧹 Limpando pacotes antigos no repositório $branch..."
-        send_telegram_message "🧹 **Iniciando limpeza de pacotes antigos no repositório** \`$branch_escaped\`"
+        #message="🧹 <b>build-package - Iniciando limpeza de pacotes antigos no repositório</b>"
+        #send_telegram_message "$message"
 
         ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
-          
+
           # Manter apenas a versão mais recente de cada pacote
           for pkg in $(ls *.pkg.tar.zst | cut -d- -f1 | sort -u); do
             newest=\$(ls \${pkg}-*.pkg.tar.zst | sort -V | tail -n1)
             for old in \${pkg}-*.pkg.tar.zst; do
               if [ "\$old" != "\$newest" ]; then
-                echo "Removing old package: \$old"
+                echo "${red}Removing old package: \$old ${reset}"
                 rm -f "\$old" "\${old}.sig" "\${old}.md5"
               fi
             done
           done
 
           # Remover os bancos de dados existentes
-          rm -f $db_name.db.tar.gz $db_name.files.tar.gz
+          rm -f ${db_name}.db.tar.gz ${db_name}.files.tar.gz
 
           # Recriar o banco de dados com os pacotes presentes
-          repo-add $db_name.db.tar.gz *.pkg.tar.zst
+          repo-add ${db_name}.db.tar.gz *.pkg.tar.zst
 
           # Remover arquivos .sig e .md5 órfãos
           for file in *.sig *.md5; do
@@ -719,18 +733,18 @@ runs:
               rm -f "\$file"
             fi
           done
-          
           exit_code=\$?
-          echo "Limpeza concluída com código de saída: \$exit_code"
+          echo "${cyan}Limpeza concluída com código de saída: ${yellow}\$exit_code ${reset}"
           exit \$exit_code
         EOF
 
         if [ $? -eq 0 ]; then
-          echo "✅ Limpeza de pacotes antigos concluída com sucesso!"
-          send_telegram_message "✅ **Limpeza de pacotes antigos no repositório** \`$branch_escaped\` **concluída com sucesso\!**"
+          #message="✅ <b>build-package - Limpeza de pacotes antigos no repositório</b>"
+          #send_telegram_message "$message"
+          :
         else
-          echo "❌ Falha na limpeza de pacotes antigos."
-          send_telegram_message "❌ **Falha na limpeza de pacotes antigos no repositório** \`$branch_escaped\`\."
+          message="❌ <b>Falha na limpeza de pacotes antigos no repositório</b>"
+          send_telegram_message "$message"
         fi
 
     # Send a Telegram alert if the build fails
@@ -738,6 +752,35 @@ runs:
       if: failure()
       shell: bash
       run: |
-        curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
-          -d chat_id="${{ inputs.telegram_chat_id }}" \
-          -d text="🚨 FALHA ao criar Pacote Community: ${{ github.event.action }} a partir do branch ${{ github.ref_name }}, link do erro: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }} 🖥"
+        # Function to send Telegram message
+        source /tmp/send_telegram_message.sh
+        link_action=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+        message="🚨 <b>FALHA ao criar pacote:</b>
+        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+        <b>Pacote:</b> <code>${{ github.event.action }}</code>
+        <b>Branch:</b> <code>${{ github.ref_name }}</code>
+        <b>URL erro:</b> <a href='https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}'>${link_action}</a>"
+        send_telegram_message "$message"
+
+    - name: Capturar hora de término e calcular duração
+      shell: bash
+      run: |
+        # Function to send Telegram message
+        source /tmp/send_telegram_message.sh
+
+        START_TIME="${{ inputs.start_time }}"
+        START_TIMESTAMP="${{ inputs.start_timestamp }}"
+        END_TIME=$(date +"%Y-%m-%d %H:%M:%S")  # Hora completa
+        END_TIMESTAMP=$(date +%s)
+        duration=$((END_TIMESTAMP - START_TIMESTAMP))
+
+        hours=$((duration / 3600))
+        minutes=$(( (duration % 3600) / 60 ))
+        seconds=$((duration % 60))
+
+        message="🏆 <b>build-package - 3/3 - JOB FINALIZADO EM ⏳:</b> <code>${hours}h ${minutes}m ${seconds}s</code>
+        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+        <b>Inicio:</b> <code>${START_TIME}</code>
+        <b>Fim   :</b> <code>${END_TIME}</code>"
+        send_telegram_message "$message"
