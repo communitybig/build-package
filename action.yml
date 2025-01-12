@@ -910,7 +910,6 @@ runs:
         msg_info "Upload Path            : ${upload_path}"
         msg_info "full_pkgname (sig)     : ${{env.PKG_PATH}}.sig"
         msg_info "full_pkgname (md5)     : ${{env.PKG_PATH}}.md5"
-        msg_info "full_pkgname (sig.md5) : ${{env.PKG_PATH}}.sig.md5"
         msg_info "release                : ${release}"
         msg_info "release_name           : ${release_name}"
         popd || true
@@ -936,7 +935,6 @@ runs:
         files: |
           ${{ env.PKG_PATH }}.sig
           ${{ env.PKG_PATH }}.md5
-          ${{ env.PKG_PATH }}.sig.md5
           ${{ steps.prepare-package.outputs.upload_path }}
         tag_name: ${{ env.PKG_TAG_NAME }}
         name: ${{ steps.prepare-package.outputs.release_name }}
@@ -946,7 +944,6 @@ runs:
           - **Arquivo PKG        :** ${{ env.PKGNAME_BASENAME }}
           - **Arquivo SIG        :** ${{ env.PKGNAME_BASENAME }}.sig
           - **Arquivo MD5        :** ${{ env.PKGNAME_BASENAME }}.md5
-          - **Arquivo SIG.MD5    :** ${{ env.PKGNAME_BASENAME }}.sig.md5
           - **Nome do Repositório:** ${{ env.REPO_NAME }}
         draft: false
         prerelease: false
