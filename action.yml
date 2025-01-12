@@ -531,7 +531,7 @@ runs:
         fi
 
         # Move the compiled package to /home/packages
-        cd $gitfolder
+        #cd $gitfolder
         mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
 
         echo "Build completed. Checking /home/packages:"
@@ -847,18 +847,24 @@ runs:
       id: set-tag-name
       shell: bash
       run: |
-        #Extrair data do nome do arquivo .zst e definir tag_name
         source /tmp/send_telegram_message.sh
         replicate '#'
         FILENAME="${{env.PKGNAME_BASENAME}}"
-        TAG_NAME="${{env.TAG_NAME}}"
+        
+        # Remove a extensão .pkg.tar.zst do nome do arquivo
+        RELEASE_NAME=$(echo "$FILENAME" | sed 's/\.pkg\.tar\.zst$//')
+        
+        # Define o TAG_NAME baseado no RELEASE_NAME
+        TAG_NAME="$RELEASE_NAME"
+        
         echo "PKG_TAG_NAME=$TAG_NAME"                            >> $GITHUB_ENV
+        echo "RELEASE_NAME=$RELEASE_NAME"                        >> $GITHUB_ENV
         echo "pkg_path=/home/packages/${{env.PKGNAME_BASENAME}}" >> $GITHUB_OUTPUT
         echo "PKG_PATH=/home/packages/${{env.PKGNAME_BASENAME}}" >> $GITHUB_ENV
 
         msg_raw "FILENAME    : ${{env.PKGNAME_BASENAME}}"
-        msg_raw "TAG_NAME    : ${{env.TAG_NAME}}"
-        msg_raw "PKG_TAG_NAME: $TAG_NAME"
+        msg_raw "TAG_NAME    : $TAG_NAME"
+        msg_raw "RELEASE_NAME: $RELEASE_NAME"
         msg_raw "pkg_path    : /home/packages/${{env.PKGNAME_BASENAME}}"
         msg_raw "PKG_PATH    : /home/packages/${{env.PKGNAME_BASENAME}}"
         replicate '#'
@@ -910,7 +916,6 @@ runs:
         msg_info "Upload Path            : ${upload_path}"
         msg_info "full_pkgname (sig)     : ${{env.PKG_PATH}}.sig"
         msg_info "full_pkgname (md5)     : ${{env.PKG_PATH}}.md5"
-        msg_info "full_pkgname (sig.md5) : ${{env.PKG_PATH}}.sig.md5"
         msg_info "release                : ${release}"
         msg_info "release_name           : ${release_name}"
         popd || true
@@ -932,21 +937,22 @@ runs:
       if: ${{ inputs.teste_input != true }}
       id: create_release
       uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
       with:
         files: |
+          ${{ env.PKG_PATH }}
           ${{ env.PKG_PATH }}.sig
           ${{ env.PKG_PATH }}.md5
-          ${{ env.PKG_PATH }}.sig.md5
           ${{ steps.prepare-package.outputs.upload_path }}
-        tag_name: ${{ env.PKG_TAG_NAME }}
-        name: ${{ steps.prepare-package.outputs.release_name }}
+        tag_name: ${{ env.RELEASE_NAME }}
+        name: ${{ env.RELEASE_NAME }}
         generate_release_notes: true
         body: |
           - **Data e Hora        :** ${{ env.START_TIME }}
           - **Arquivo PKG        :** ${{ env.PKGNAME_BASENAME }}
           - **Arquivo SIG        :** ${{ env.PKGNAME_BASENAME }}.sig
           - **Arquivo MD5        :** ${{ env.PKGNAME_BASENAME }}.md5
-          - **Arquivo SIG.MD5    :** ${{ env.PKGNAME_BASENAME }}.sig.md5
           - **Nome do Repositório:** ${{ env.REPO_NAME }}
         draft: false
         prerelease: false
