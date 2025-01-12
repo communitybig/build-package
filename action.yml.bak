@@ -331,7 +331,7 @@ runs:
         echo "Build environment: ${{ inputs.build_env }}"
         echo "Package name: ${{ inputs.package_name }}"
 
-         # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
+        # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
         if [ -d "source_repo" ]; then
           cd source_repo
         fi
@@ -360,8 +360,38 @@ runs:
           sudo mkdir -p /tmp/makepkg
           sudo chown builduser:builduser /tmp/makepkg
 
+          # Verificar ambiente de compilação
+          echo "Verificando ambiente de compilação..."
+          gcc --version
+          meson --version
+          ninja --version
+          pkg-config --version
+
+          # Detect and import GPG keys if present in PKGBUILD
+          if [ -f "PKGBUILD" ]; then
+            echo "Checking for required PGP keys..."
+            if grep -q "validpgpkeys" PKGBUILD; then
+              # Extract GPG key from PKGBUILD
+              key=$(grep "validpgpkeys" PKGBUILD | sed 's/.*(\"\(.*\)\")/\1/')
+              
+              if [ ! -z "$key" ]; then
+                echo "Importing GPG key: $key"
+                # Try multiple keyservers to ensure key import succeeds
+                gpg --keyserver keyserver.ubuntu.com --recv-keys "$key" || \
+                gpg --keyserver keys.gnupg.net --recv-keys "$key" || \
+                gpg --keyserver hkp://pgp.mit.edu --recv-keys "$key" || \
+                echo "Warning: Failed to import key $key"
+              fi
+            else
+              echo "No PGP keys defined in PKGBUILD"
+            fi
+          fi
+
           # Extract dependencies from PKGBUILD
           source PKGBUILD
+          echo "Debug: Loading dependencies from the PKGBUILD..."
+          echo "depends: ${depends[@]}"
+          echo "makedepends: ${makedepends[@]}"
 
           # Install all dependencies using yay
           install_dependencies() {
@@ -383,7 +413,7 @@ runs:
 
           # Build the package without installing
           echo "Building AUR package: ${{ inputs.package_name }}"
-          makepkg -s --noconfirm --noprogressbar --nodeps --skipchecksums
+          makepkg -s --noconfirm --noprogressbar --nodeps
 
           # Move the compiled package to /home/packages
           mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
