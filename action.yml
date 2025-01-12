@@ -907,7 +907,7 @@ runs:
         replicate '#'
 
     - name: Prepare Package for release (7z)
-      if: ${{ inputs.branch_type != "testing" }}
+      if: inputs.branch_type != 'testing'
       id: prepare-package
       shell: bash
       run: |
@@ -973,7 +973,7 @@ runs:
         replicate '='
 
     - name: Create Release
-      if: ${{ inputs.branch_type != "testing" }}
+      if: inputs.branch_type != 'testing'
       id: create_release
       uses: softprops/action-gh-release@v1
       with:
