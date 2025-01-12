@@ -58,6 +58,9 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
     container:
       image: talesam/community-build:1.6
       options: --privileged

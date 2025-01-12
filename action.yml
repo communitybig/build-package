@@ -847,19 +847,24 @@ runs:
       id: set-tag-name
       shell: bash
       run: |
-        #Extrair data do nome do arquivo .zst e definir tag_name
         source /tmp/send_telegram_message.sh
         replicate '#'
         FILENAME="${{env.PKGNAME_BASENAME}}"
-        #TAG_NAME="${{env.TAG_NAME}}"
-        TAG_NAME=$(echo "$FILENAME" | grep -oP '\d{2}\.\d{2}\.\d{2}|\d{8}' | sed -E 's/(\d{2})\.(\d{2})\.(\d{2})/20\1\2\3/')-$(date +%H%M)
+        
+        # Remove a extensão .pkg.tar.zst do nome do arquivo
+        RELEASE_NAME=$(echo "$FILENAME" | sed 's/\.pkg\.tar\.zst$//')
+        
+        # Define o TAG_NAME baseado no RELEASE_NAME
+        TAG_NAME="$RELEASE_NAME"
+        
         echo "PKG_TAG_NAME=$TAG_NAME"                            >> $GITHUB_ENV
+        echo "RELEASE_NAME=$RELEASE_NAME"                        >> $GITHUB_ENV
         echo "pkg_path=/home/packages/${{env.PKGNAME_BASENAME}}" >> $GITHUB_OUTPUT
         echo "PKG_PATH=/home/packages/${{env.PKGNAME_BASENAME}}" >> $GITHUB_ENV
 
         msg_raw "FILENAME    : ${{env.PKGNAME_BASENAME}}"
-        msg_raw "TAG_NAME    : ${{env.TAG_NAME}}"
-        msg_raw "PKG_TAG_NAME: $TAG_NAME"
+        msg_raw "TAG_NAME    : $TAG_NAME"
+        msg_raw "RELEASE_NAME: $RELEASE_NAME"
         msg_raw "pkg_path    : /home/packages/${{env.PKGNAME_BASENAME}}"
         msg_raw "PKG_PATH    : /home/packages/${{env.PKGNAME_BASENAME}}"
         replicate '#'
@@ -932,13 +937,16 @@ runs:
       if: ${{ inputs.teste_input != true }}
       id: create_release
       uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
       with:
         files: |
+          ${{ env.PKG_PATH }}
           ${{ env.PKG_PATH }}.sig
           ${{ env.PKG_PATH }}.md5
           ${{ steps.prepare-package.outputs.upload_path }}
-        tag_name: ${{ env.PKG_TAG_NAME }}
-        name: ${{ steps.prepare-package.outputs.release_name }}
+        tag_name: ${{ env.RELEASE_NAME }}
+        name: ${{ env.RELEASE_NAME }}
         generate_release_notes: true
         body: |
           - **Data e Hora        :** ${{ env.START_TIME }}
