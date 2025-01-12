@@ -531,7 +531,7 @@ runs:
         fi
 
         # Move the compiled package to /home/packages
-        cd $gitfolder
+        #cd $gitfolder
         mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
 
         echo "Build completed. Checking /home/packages:"
