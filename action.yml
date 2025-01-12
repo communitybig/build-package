@@ -534,13 +534,11 @@ runs:
           ${{ inputs.extra_command }}
         fi
 
-        # Debug: Mostrar conteúdo do diretório após o build
-        echo "Directory contents after build:"
-        ls -la
-        echo "Contents of /home/packages:"
+        # Move the compiled package to /home/packages
+        mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
+
+        echo "Build completed. Checking /home/packages:"
         ls -la /home/packages
-        echo "Contents of /home/sources:"
-        ls -la /home/sources
 
     # Assina o pacote
     - name: Sign Package
@@ -727,7 +725,7 @@ runs:
           <b>Repositório:</b> <code>${branch_escaped}</code>"
           send_telegram_message "$message"
 
-          if rsync -vapz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/; then
+          if rsync --itemize-changes -apz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/; then
             #message="✅ <b>build-package - Pacote enviado com sucesso para o repositório</b>"
             #send_telegram_message "$message"
             :
