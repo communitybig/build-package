@@ -230,7 +230,7 @@ runs:
     - name: Initializing package creation
       shell: bash
       run: |
-        # Function to send Telegram message
+        #Initializing package creation
         source /tmp/send_telegram_message.sh
 
         pkgname="${{ inputs.package_name }}"
@@ -276,6 +276,7 @@ runs:
     - name: Configure System and Repositories
       shell: bash
       run: |
+        #Configure System and Repositories
         echo "Build environment: ${{ inputs.build_env }}"
         echo "Build environment from env: $DEBUG_BUILD_ENV"
         echo "All inputs:"
@@ -402,11 +403,12 @@ runs:
     - name: Build package
       shell: bash
       run: |
+        #Build package
         source /tmp/send_telegram_message.sh
         set -ex  # Isso fará o script falhar se qualquer comando falhar
         # Debug: Mostrar ambiente de build
-        echo "Build environment: ${{ inputs.build_env }}"
-        echo "Package name: ${{ inputs.package_name }}"
+        msg_raw "Build environment: ${{ inputs.build_env }}"
+        msg_raw "Package name: ${{ inputs.package_name }}"
 
         # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
         if [ -d "source_repo" ]; then
@@ -414,9 +416,9 @@ runs:
         fi
 
         # Debug: Mostrar diretório atual e conteúdo
-        echo "Current directory: $(pwd)"
-        echo "Directory contents:"
-        ls -la
+        msg_raw "Current directory: $(pwd)"
+        msg_raw "Directory contents:"
+        msg_run "ls -la $PWD"
 
         # Create and set permissions for $PKGDEST and $SRCDEST
         sudo mkdir -p /home/packages /home/sources
@@ -425,10 +427,10 @@ runs:
         if [ "${{ inputs.build_env }}" == "aur" ]; then
           # For packages AUR
           cd ${{ inputs.aur_package_dir }}
-          echo "Construindo pacote AUR: ${{ inputs.package_name }}"
-          echo "Current AUR package directory: $(pwd)"
-          echo "AUR package directory contents:"
-          ls -la
+          msg_raw "Construindo pacote AUR: ${{ inputs.package_name }}"
+          msg_raw "Current AUR package directory: $(pwd)"
+          msg_raw "AUR package directory contents:"
+          msg_run "ls -la $PWD"
 
           # Give permissions to builduser for the current directory
           sudo chown -R builduser:builduser .
@@ -450,7 +452,7 @@ runs:
             if grep -q "validpgpkeys" PKGBUILD; then
               # Extract GPG key from PKGBUILD
               key=$(grep "validpgpkeys" PKGBUILD | sed 's/.*(\"\(.*\)\")/\1/')
-              
+
               if [ ! -z "$key" ]; then
                 echo "Importing GPG key: $key"
                 # Try multiple keyservers to ensure key import succeeds
@@ -493,12 +495,6 @@ runs:
           # Build the package without installing
           echo "Building AUR package: ${{ inputs.package_name }}"
           makepkg -s --noconfirm --noprogressbar --nodeps
-
-          # Move the compiled package to /home/packages
-          mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
-
-          echo "Build completed. Checking /home/packages:"
-          ls -la /home/packages
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
@@ -535,33 +531,23 @@ runs:
         fi
 
         # Move the compiled package to /home/packages
+        cd $gitfolder
         mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
 
         echo "Build completed. Checking /home/packages:"
-        ls -la /home/packages
+        msg_run "ls -lah /home/packages"
 
     # Assina o pacote
     - name: Sign Package
       shell: bash
       run: |
+        #Sign Package
+        source /tmp/send_telegram_message.sh
+        cd /home/packages
+        msg_run "ls -lah $PWD"
+
         # Importa a chave GPG
         echo "${{ inputs.gpg_key }}" | gpg --batch --import &>/dev/null
-
-        if [ "${{ inputs.build_env }}" == "aur" ]; then
-          # Para pacotes AUR
-          cd /home/packages
-        else
-          # Para pacotes não-AUR
-          gitfolder=$(find . -type f -name PKGBUILD | sed 's/PKGBUILD$//')
-          if [ -z "$gitfolder" ]; then
-            echo "PKGBUILD não encontrado. Usando diretório atual."
-            gitfolder="."
-          fi
-          #cd "$gitfolder"
-          cd /home/packages
-        fi
-
-        ls -lah
         # Assina todos os pacotes encontrados
         for p in $(find $PWD -maxdepth 1 -regex '.*\.pkg\.tar\.\(xz\|zst\)'); do
           if [ -f "$p" ]; then
@@ -578,20 +564,10 @@ runs:
     - name: Generate checksums
       shell: bash
       run: |
-        if [ "${{ inputs.build_env }}" == "aur" ]; then
-          # Para pacotes AUR
-          cd /home/packages
-        else
-          # Para pacotes não-AUR
-          gitfolder=$(find . -type f -name PKGBUILD | sed 's/PKGBUILD$//')
-          if [ -z "$gitfolder" ]; then
-            echo "PKGBUILD não encontrado. Usando diretório atual."
-            gitfolder="."
-          fi
-          #cd "$gitfolder"
-          cd /home/packages
-        fi
-
+        #Generate checksums
+        source /tmp/send_telegram_message.sh
+        cd /home/packages
+        msg_run "ls -lah $PWD"
         # Gera checksums para pacotes e assinaturas
         for i in *.pkg.tar.zst; do
           if [ -f "$i" ]; then
@@ -616,10 +592,12 @@ runs:
       if: inputs.publish_github == 'true' && inputs.build_env != 'aur'
       shell: bash
       run: |
+        #Publish Package on GitHub
+        source /tmp/send_telegram_message.sh
         gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
         #cd $gitfolder
         cd /home/packages
-        ls -lh
+        msg_run "ls -lah $PWD"
 
         # Skip linux-zen packages
         if [ -n "$(grep linux-zen <<< $gitfolder)" ];then
@@ -674,6 +652,8 @@ runs:
         LANG: en_US.UTF-8
         LC_ALL: en_US.UTF-8
       run: |
+        #Push to Repo
+        source /tmp/send_telegram_message.sh
         # Setup SSH
         mkdir -p /home/builduser/.ssh
         ssh-keyscan -t rsa -p ${{ inputs.repo_port }} ${{ inputs.repo_host }} >> /home/builduser/.ssh/known_hosts
@@ -704,11 +684,7 @@ runs:
             branch="TESTING"
           fi
         fi
-
-        ls -lh
-
-        # Function to send Telegram message
-        source /tmp/send_telegram_message.sh
+        msg_run "ls -lah $PWD"
 
         # Upload the package files
         for i in *.pkg.tar.zst; do
@@ -748,9 +724,8 @@ runs:
       if: inputs.update_db == 'true' && success()
       shell: bash
       run: |
-        # Function to send Telegram message
+        #Update Repository Database
         source /tmp/send_telegram_message.sh
-
         # Determine the database name based on the branch type
         if [ "${{ inputs.branch_type }}" == "stable" ]; then
           branch="STABLE"
@@ -797,7 +772,7 @@ runs:
       if: inputs.update_db == 'true' && success()
       shell: bash
       run: |
-        # Function to send Telegram message
+        #Clean Old Packages
         source /tmp/send_telegram_message.sh
 
         # Determine the branch based on the branch type
@@ -976,7 +951,7 @@ runs:
         draft: false
         prerelease: false
         fail_on_unmatched_files: false
-  
+
     # Send a Telegram alert if the build fails
     - name: Telegram Alert Fail
       if: failure()
