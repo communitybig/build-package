@@ -626,11 +626,11 @@ runs:
           exit 0
         fi
 
-        # Determine the last committer
-        lastCommit=$(git log -1 --format="%an <%ae>")
-        if [ "$(grep github-actions <<< $lastCommit)" ];then
-          lastCommit=$(git log -2 --format="%an <%ae>")
-        fi
+        # # Determine the last committer
+        # lastCommit=$(git log -1 --format="%an <%ae>")
+        # if [ "$(grep github-actions <<< $lastCommit)" ];then
+        #   lastCommit=$(git log -2 --format="%an <%ae>")
+        # fi
 
         # Set up GitHub authentication and determine the repository
         if [ -n "${{ inputs.url }}" ]; then
@@ -686,14 +686,14 @@ runs:
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-          #cd $gitfolder
+          cd $gitfolder
           cd /home/packages
 
           # Determine the last committer (apenas para pacotes não-AUR)
-          lastCommit=$(git log -1 --format="%an <%ae>")
-          if [ "$(grep github-actions <<< $lastCommit)" ];then
-            lastCommit=$(git log -2 --format="%an <%ae>")
-          fi
+          # lastCommit=$(git log -1 --format="%an <%ae>")
+          # if [ "$(grep github-actions <<< $lastCommit)" ];then
+          #   lastCommit=$(git log -2 --format="%an <%ae>")
+          # fi
 
           # Set the branch based on BRANCH_TYPE
           if [ "${{ inputs.branch_type }}" == "stable" ]; then
