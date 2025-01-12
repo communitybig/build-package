@@ -557,7 +557,8 @@ runs:
             echo "PKGBUILD não encontrado. Usando diretório atual."
             gitfolder="."
           fi
-          cd "$gitfolder"
+          #cd "$gitfolder"
+          cd /home/packages
         fi
 
         ls -lah
@@ -587,7 +588,8 @@ runs:
             echo "PKGBUILD não encontrado. Usando diretório atual."
             gitfolder="."
           fi
-          cd "$gitfolder"
+          #cd "$gitfolder"
+          cd /home/packages
         fi
 
         # Gera checksums para pacotes e assinaturas
@@ -615,7 +617,8 @@ runs:
       shell: bash
       run: |
         gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-        cd $gitfolder
+        #cd $gitfolder
+        cd /home/packages
         ls -lh
 
         # Skip linux-zen packages
@@ -683,7 +686,8 @@ runs:
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-          cd $gitfolder
+          #cd $gitfolder
+          cd /home/packages
 
           # Determine the last committer (apenas para pacotes não-AUR)
           lastCommit=$(git log -1 --format="%an <%ae>")
