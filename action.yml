@@ -812,15 +812,17 @@ runs:
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
           repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
           exit_code=\$?
-          echo -e "${red}Comando repo-add concluído com código de saída: \$exit_code ${reset}"
           exit \$exit_code
         EOF
+        retval="$?"
 
-        if [ $? -eq 0 ]; then
-          #message="✅ <b>build-package - Sincronização do banco de dados no repositório concluida com sucesso</b>"
+        if [[ $retval -eq 0 ]]; then
+          msg_ok "Comando repo-add concluído com código de saída: $retval"
+          message="✅ <b>build-package - Sincronização do banco de dados no repositório concluida com sucesso</b>"
           #send_telegram_message "$message"
           :
         else
+          msg_warning "Comando repo-add concluído com código de saída: $retval"
           message="❌ <b>build-package - Falha na sincronização do banco de dados no repositório</b>"
           send_telegram_message "$message"
         fi
@@ -850,8 +852,8 @@ runs:
           exit 1
         fi
 
-        echo "Branch: $branch"
-        echo "Database name: $db_name"
+        msg_raw "Branch       : $branch"
+        msg_raw "Database name: $db_name"
         branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
         #message="🧹 <b>build-package - Iniciando limpeza de pacotes antigos no repositório</b>"
@@ -887,11 +889,12 @@ runs:
             fi
           done
           exit_code=$?
-          echo -e "${cyan}Limpeza concluída com código de saída: ${exit_code} ${reset}"
           exit $exit_code
         EOF
+        retval="$?"
 
-        if [[ $? -eq 0 ]]; then
+        if [[ $retval -eq 0 ]]; then
+          msg_ok "Limpeza concluída com código de saída: $retval"
           message="🧹 <b>[step 4/6] build-package - INICIANDO LIMPEZA DE PACOTES ANTIGOS</b>
           ✅ <b>[step 5/6] Limpeza de pacotes antigos concluída com êxito</b>
           <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
@@ -899,6 +902,7 @@ runs:
           #send_telegram_message "$message"
           :
         else
+          msg_warning "Limpeza concluída com código de saída: $retval"
           message="🧹 <b>[step 4/6] build-package - INICIANDO LIMPEZA DE PACOTES ANTIGOS</b>
           ❌ <b>[step 5/6] Falha na limpeza de pacotes antigos</b>
           <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
