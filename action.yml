@@ -760,6 +760,8 @@ runs:
         ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           #set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
+          echo "Current path: $PWD"
+          echo "lh -lah $PWD"
           repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
           exit_code=\$?
           exit \$exit_code
@@ -812,15 +814,15 @@ runs:
         ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           #set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
-          msg_info "Current path: $PWD"
-          msg_run "lh -lah $PWD"
+          echo "Current path: $PWD"
+          echo "lh -lah $PWD"
 
           # Manter apenas a versão mais recente de cada pacote
           for pkg in $(ls *.pkg.tar.zst | cut -d- -f1 | sort -u); do
             newest=\$(ls \${pkg}-*.pkg.tar.zst | sort -V | tail -n1)
             for old in \${pkg}-*.pkg.tar.zst; do
               if [ "\$old" != "\$newest" ]; then
-                msg_warning "Removing old package: \$old"
+                echo "Removing old package: \$old"
                 rm -f "\$old" "\${old}.sig" "\${old}.md5"
               fi
             done
@@ -836,7 +838,7 @@ runs:
           for file in *.sig *.md5; do
             base_name=\${file%.*}
             if [ ! -f "\${base_name}" ]; then
-              msg_warning "Removing orphaned file: \$file"
+              echo "Removing orphaned file: \$file"
               rm -f "\$file"
             fi
           done
