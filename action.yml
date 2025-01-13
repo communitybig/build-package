@@ -590,7 +590,8 @@ runs:
         fi
 
         # Move the compiled package to /home/packages
-        mv *.pkg.tar.zst /home/packages/ 2>/dev/null || msg_warning 'No package found to move'
+        #mv *.pkg.tar.zst /home/packages/ 2>/dev/null || msg_warning 'No package found to move'
+        cp -f *.pkg.tar.zst /home/packages/ 2>/dev/null || msg_warning 'No package found to move'
 
         msg_info '# Debug: Mostrar conteúdo do diretório após o build'
         msg_run "ls -la $PWD"
@@ -860,7 +861,7 @@ runs:
         #send_telegram_message "$message"
 
         ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
-          set -x
+          #set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
 
           # Manter apenas a versão mais recente de cada pacote
