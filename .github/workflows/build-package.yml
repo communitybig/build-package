@@ -55,7 +55,7 @@ env:
   REPO_NAME: "${{ github.repository }}"
   BRANCH_FULLNAME: "${{ github.event.client_payload.branch }}"
   REPOSITORY_TOKEN: "${{ secrets.REPOSITORY_TOKEN }}"
-  ORGANIZATION_TOKEN: "${{ secrets.TOKEN_RELEASE }}"
+  ORGANIZATION_TOKEN: "${{ secrets.ORGANIZATION_TOKEN }}"
 
 jobs:
   build:
