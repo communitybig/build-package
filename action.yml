@@ -737,7 +737,7 @@ runs:
         else
           # Para pacotes não-AUR
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-          cd $gitfolder
+          #cd $gitfolder
           cd /home/packages
 
           # Determine the last committer (apenas para pacotes não-AUR)
