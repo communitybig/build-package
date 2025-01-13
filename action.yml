@@ -737,7 +737,7 @@ runs:
         for i in *.sig *.md5; do
           rsync --itemize-changes -apz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/
         done
-				replicate '#'
+        replicate '#'
 
     #    # Runs only if previous steps were successful
     #    - name: Update Repository Database
@@ -850,7 +850,7 @@ runs:
             base_name=${file%.*}
             echo -e "\033[01;32m=>Procurando por arquivo orfão : $file ${RESET}"
             if [[ ! -f "${base_name}" ]]; then
-							echo -e "\033[01;31m=>Removendo arquivo orfão : $file ${RESET}"
+              echo -e "\033[01;31m=>Removendo arquivo orfão : $file ${RESET}"
               rm -fv "$file"
             fi
           done
