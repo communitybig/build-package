@@ -78,13 +78,13 @@ jobs:
     - name: Build and Publish Package
       uses: ./
       with:
-        build_env: ${{ github.event.client_payload.build_env }}
-        branch_type: ${{ github.event.client_payload.branch_type }}
-        package_name: ${{ github.event.client_payload.package_name }}
+        build_env: 'aur'
+        branch_type: 'aur'
+        package_name: ${{ env.PACKAGE_NAME }}
         aur_package_dir: './aur_package'
-        url: ${{ github.event.client_payload.aur_url }}
+        url: ${{ env.AUR_URL }}
         
-        tmate: ${{ github.event.client_payload.tmate || 'false' }}
+        tmate: ${{ github.event.client_payload.tmate || inputs.tmate || 'false' }}
         
         github_token: ${{ secrets.GITHUB_TOKEN }}
         gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -97,9 +97,9 @@ jobs:
         repo_port: ${{ secrets.PKGBUILD_PORT }}
         repo_dir: ${{ secrets.PKGBUILD_DIR }}
         
-        publish_github: 'true'
-        push_to_repo: 'true'
-        update_db: 'true'
+        publish_github: ${{ inputs.publish_github || 'true' }}
+        push_to_repo: ${{ inputs.push_to_repo || 'true' }}
+        update_db: ${{ inputs.update_db || 'true' }}
 
     - name: Cleanup
       if: always()

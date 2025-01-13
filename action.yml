@@ -431,15 +431,14 @@ runs:
           msg_run "git clone ${{ inputs.url }} aur_package"
 
           if [[ -d "aur_package" ]]; then
-            msg_run 'cd aur_package'
-
-            # Extrair informações do repositório clonado
-            REPO_ORIGEM_URL="${{ inputs.repo_origem }}"
-            REPO_ORIGEM_NAME=$(basename -s .git "$REPO_ORIGEM_URL")
-            REPO_ORIGEM_OWNER=$(echo "$REPO_ORIGEM_URL" | awk -F[/:] '{print $(NF-1)}')
-
+            cd aur_package
+            
+            # Extrair nome do pacote da URL do AUR
+            REPO_ORIGEM_NAME=$(basename "${{ inputs.url }}" .git)
+            REPO_ORIGEM_OWNER="aur"
+            
             # Exportar para o ambiente do GitHub Actions
-            echo "REPO_ORIGEM_NAME=$REPO_ORIGEM_NAME"   >> $GITHUB_ENV
+            echo "REPO_ORIGEM_NAME=$REPO_ORIGEM_NAME" >> $GITHUB_ENV
             echo "REPO_ORIGEM_OWNER=$REPO_ORIGEM_OWNER" >> $GITHUB_ENV
 
             if [[ ! -f "PKGBUILD" ]]; then
