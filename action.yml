@@ -727,58 +727,58 @@ runs:
           rsync --itemize-changes -apz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/
         done
 
-    # Runs only if previous steps were successful
-    - name: Update Repository Database
-      if: inputs.update_db == 'true' && success()
-      shell: bash
-      run: |
-        #Update Repository Database
-        source /tmp/send_telegram_message.sh
-        replicate '#'
-        # Determine the database name based on the branch type
-        if [ "${{ inputs.branch_type }}" == "stable" ]; then
-          branch="STABLE"
-          db_name="community-stable"
-        elif [ "${{ inputs.branch_type }}" == "extra" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
-          branch="EXTRA"
-          db_name="community-extra"
-        elif [ "${{ inputs.branch_type }}" == "testing" ]; then
-          branch="TESTING"
-          db_name="community-testing"
-        else
-          die "Error: Unknown branch type: ${{ inputs.branch_type }}"
-        fi
-
-        msg_raw "Branch       : $branch"
-        msg_raw "Database name: $db_name"
-        branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-        db_name_escaped=$(echo "$db_name" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-
-        message="🔄 <b>build-package - Iniciando sincronização do banco de dados no repositório</b>"
-        #send_telegram_message "$message"
-
-        ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
-          #set -x
-          cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
-          echo "Current path: \$PWD"
-          echo "ls -lah \$PWD"
-          repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
-          exit_code=\$?
-          exit \$exit_code
-        EOF
-        retval="$?"
-
-        if [[ $retval -eq 0 ]]; then
-          msg_ok "Comando repo-add concluído com código de saída: $retval"
-          message="✅ <b>build-package - Sincronização do banco de dados no repositório concluida com sucesso</b>"
-          #send_telegram_message "$message"
-          :
-        else
-          msg_warning "Comando repo-add concluído com código de saída: $retval"
-          message="❌ <b>build-package - Falha na sincronização do banco de dados no repositório</b>"
-          send_telegram_message "$message"
-        fi
-        replicate '#'
+    #    # Runs only if previous steps were successful
+    #    - name: Update Repository Database
+    #      if: inputs.update_db == 'true' && success()
+    #      shell: bash
+    #      run: |
+    #        #Update Repository Database
+    #        source /tmp/send_telegram_message.sh
+    #        replicate '#'
+    #        # Determine the database name based on the branch type
+    #        if [ "${{ inputs.branch_type }}" == "stable" ]; then
+    #          branch="STABLE"
+    #          db_name="community-stable"
+    #        elif [ "${{ inputs.branch_type }}" == "extra" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
+    #          branch="EXTRA"
+    #          db_name="community-extra"
+    #        elif [ "${{ inputs.branch_type }}" == "testing" ]; then
+    #          branch="TESTING"
+    #          db_name="community-testing"
+    #        else
+    #          die "Error: Unknown branch type: ${{ inputs.branch_type }}"
+    #        fi
+    #
+    #        msg_raw "Branch       : $branch"
+    #        msg_raw "Database name: $db_name"
+    #        branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+    #        db_name_escaped=$(echo "$db_name" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+    #
+    #        message="🔄 <b>build-package - Iniciando sincronização do banco de dados no repositório</b>"
+    #        #send_telegram_message "$message"
+    #
+    #        ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
+    #          #set -x
+    #          cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
+    #          echo "Current path: \$PWD"
+    #          echo "ls -lah \$PWD"
+    #          repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
+    #          exit_code=\$?
+    #          exit \$exit_code
+    #        EOF
+    #        retval="$?"
+    #
+    #        if [[ $retval -eq 0 ]]; then
+    #          msg_ok "Comando repo-add concluído com código de saída: $retval"
+    #          message="✅ <b>build-package - Sincronização do banco de dados no repositório concluida com sucesso</b>"
+    #          #send_telegram_message "$message"
+    #          :
+    #        else
+    #          msg_warning "Comando repo-add concluído com código de saída: $retval"
+    #          message="❌ <b>build-package - Falha na sincronização do banco de dados no repositório</b>"
+    #          send_telegram_message "$message"
+    #        fi
+    #        replicate '#'
 
     - name: Clean Old Packages
       if: inputs.update_db == 'true' && success()
