@@ -54,6 +54,8 @@ env:
   REPO_ORIGEM: "${{ github.event.client_payload.url }}"
   REPO_NAME: "${{ github.repository }}"
   BRANCH_FULLNAME: "${{ github.event.client_payload.branch }}"
+  REPOSITORY_TOKEN: "${{ secrets.REPOSITORY_TOKEN }}"
+  ORGANIZATION_TOKEN: "${{ secrets.ORGANIZATION_TOKEN }}"
 
 jobs:
   build:
@@ -79,16 +81,20 @@ jobs:
         run: |
           started_by_user="${{ github.actor }}"
           triggered_by_user="${{ github.triggering_actor }}"
+          repo_path="${{ secrets.PKGBUILD_DIR }}"
           link_action=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
 
-          MESSAGE="⭐ <b>build-package - 1/3 - WORKFLOW INICIADO</b>
+          MESSAGE="⭐ <b>[step 1/4] build-package - INICIANDO CRIAÇÃO DE PACOTE</b>
           <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
           <b>Job URL:</b> <a href='https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}'>${link_action}</a>
-          <b>Iniciado/Triggered por:</b> <code>$started_by_user/$triggered_by_user</code>
-          <b>Nome:</b> <code>${PACKAGE_NAME}</code>
-          <b>Origem:</b> <code>${REPO_ORIGEM}</code>
-          <b>Branch Origem :</b> <code>${BRANCH_FULLNAME}</code>
-          <b>Inicio:</b> <code>${{ env.START_TIME }}</code>"
+          <b>Workflow:</b> <code>build-package/build-package.yml</code>
+          <b>Iniciado/Triggered:</b> <code>${started_by_user}/${triggered_by_user}</code>
+          <b>Inicio:</b> <code>${{ env.START_TIME }}</code>
+          <b>Nome:</b> <code>${{ env.PACKAGE_NAME }}</code>
+          <b>Repo Origem:</b> <code>${{ env.REPO_ORIGEM }}</code>
+          <b>Branch origem:</b> <code>${{ env.BRANCH_FULLNAME }}</code>
+          <b>Repositório:</b> <code>${repo_path}</code>
+          <b>Branch:</b> <code>${{ env.BRANCH_TYPE }}</code>"
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
             -d chat_id="${CHAT_ID}" \
@@ -177,7 +183,7 @@ jobs:
           repo: ${{ github.repository }}
 
           # Parâmetros relacionados ao debug e tmate
-          tmate: ${{ github.event.inputs.debug_enabled || 'false' }}
+          tmate: ${{ github.event.inputs.tmate || false }}
 
           # Tokens e chaves de segurança
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -203,5 +209,5 @@ jobs:
           # Passando o START_TIME para action.yml
           start_time: "${{ env.START_TIME }}"
           start_timestamp: "${{ env.START_TIMESTAMP }}"
-          #repo_origem: "${{ github.event.client_payload.url }}"
-          #branch_fullname: "${{ github.event.client_payload.branch }}"
+          repo_origem: "${{ github.event.client_payload.url }}"
+          branch_fullname: "${{ github.event.client_payload.branch }}"
