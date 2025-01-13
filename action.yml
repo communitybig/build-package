@@ -431,15 +431,14 @@ runs:
           msg_run "git clone ${{ inputs.url }} aur_package"
 
           if [[ -d "aur_package" ]]; then
-            msg_run 'cd aur_package'
-
-            # Extrair informações do repositório clonado
-            REPO_ORIGEM_URL="${{ inputs.repo_origem }}"
-            REPO_ORIGEM_NAME=$(basename -s .git "$REPO_ORIGEM_URL")
-            REPO_ORIGEM_OWNER=$(echo "$REPO_ORIGEM_URL" | awk -F[/:] '{print $(NF-1)}')
-
+            cd aur_package
+            
+            # Extrair nome do pacote da URL do AUR
+            REPO_ORIGEM_NAME=$(basename "${{ inputs.url }}" .git)
+            REPO_ORIGEM_OWNER="aur"
+            
             # Exportar para o ambiente do GitHub Actions
-            echo "REPO_ORIGEM_NAME=$REPO_ORIGEM_NAME"   >> $GITHUB_ENV
+            echo "REPO_ORIGEM_NAME=$REPO_ORIGEM_NAME" >> $GITHUB_ENV
             echo "REPO_ORIGEM_OWNER=$REPO_ORIGEM_OWNER" >> $GITHUB_ENV
 
             if [[ ! -f "PKGBUILD" ]]; then
@@ -647,14 +646,12 @@ runs:
         msg_run "ls -lah $PWD"
 
         for p in *pkg.tar.zst; do
-          msg_info "Gerando MD5 para: $p"
-          md5sum "$p"     >> "$p.md5"
-          msg_info "Gerando MD5 para: $p.sig"
-          if md5sum "$p.sig" >> "$p.sig.md5"; then
-            msg_ok "MD5 gerado para: $p.sig"
-          else
-            msg_warning "Falha na geração de MD5 para: $p.sig"
-          fi
+          [ -e "$p" ] || continue  # Pula se não existir arquivo
+          msg_info "Gerando MD5 para: $p e $p.sig"
+          {
+            md5sum "$p"
+            [ -f "$p.sig" ] && md5sum "$p.sig"
+          } > "$p.md5"
         done
         msg_run 'ls -lah $PWD *.md5' || msg_warning 'Nenhum arquivo MD5 encontrado'
         replicate '#'
@@ -825,37 +822,63 @@ runs:
         <b>branch:</b> <code>${branch_escaped}</code>"
         #send_telegram_message "$message"
 
-        ssh "${{ inputs.repo_user }}@${{ inputs.repo_host }}" -p "${{ inputs.repo_port }}" << 'EOF'
-          cd "${{ inputs.repo_dir }}/${{ inputs.branch_type }}/x86_64"
-          echo "Current path: \$PWD"
-          echo "ls -lah \$PWD"
+        ssh "${{ inputs.repo_user }}@${{ inputs.repo_host }}" -p "${{ inputs.repo_port }}" << EOF
+          # Criar estrutura de diretórios se não existir
+          target_dir="${{ inputs.repo_dir }}/${{ inputs.branch_type }}/x86_64"
+          mkdir -p "\${target_dir}"
+          cd "\${target_dir}" || exit 1
 
-          # Manter apenas a versão mais recente de cada pacote
-          FETCH_RE='-[^-]+[0-9]+[^.]*.pkg[^.]*.tar.zst'
-          PKG_EXT='pkg.tar.zst'
-          AllOldPackages=$(find "$PWD" -type f -iname "*.$PKG_EXT" | sort -Vr | awk -F "$FETCH_RE" 'lista[$1]++')
-          for old in ${AllOldPackages[@]}; do
-            echo -e "${red}=>Removendo pacote antigo : [$((++count))]=>${old} ${reset}"
-            rm -fv "${old}" "${old}.sig" "${old}.md5" "${old}.sig.md5"
-          done
+          echo "Current path: \$(pwd)"
+          ls -lah
 
-          # Remover os bancos de dados existentes
-          rm -f ${db_name}.db.tar.gz ${db_name}.files.tar.gz
+          # Função para processar pacotes antigos
+          process_old_packages() {
+            local pkg_pattern="*.pkg.tar.zst"
+            local count=0
+            
+            # Usar find para listar todos os pacotes
+            find . -maxdepth 1 -type f -name "\${pkg_pattern}" | sort -Vr | \
+            awk -F/ '{split(\$NF,a,"-[0-9]"); if (seen[a[1]]++) print \$0}' | \
+            while read -r pkg; do
+              if [ -f "\${pkg}" ]; then
+                count=\$((count + 1))
+                echo "Removendo pacote antigo [\${count}]: \${pkg}"
+                rm -f "\${pkg}" "\${pkg}.sig" "\${pkg}.md5"
+              fi
+            done
+          }
 
-          # Recriar o banco de dados com os pacotes presentes
-          repo-add ${db_name}.db.tar.gz *.pkg.tar.zst
+          # Processar pacotes antigos
+          echo "Processando pacotes antigos..."
+          process_old_packages
 
-          # Remover arquivos .sig, .md5 e .sig.md5 órfãos
-          for file in *.sig *.md5 *.sig.md5; do
-            base_name=${file%.*}
-            echo -e "\033[01;32m=>Procurando por arquivo orfão : $file ${RESET}"
-            if [[ ! -f "${base_name}" ]]; then
-              echo -e "\033[01;31m=>Removendo arquivo orfão : $file ${RESET}"
-              rm -fv "$file"
+          # Remover e recriar banco de dados
+          echo "Atualizando banco de dados..."
+          rm -f "${db_name}.db.tar.gz" "${db_name}.files.tar.gz"
+          
+          # Verificar se existem pacotes antes de recriar o banco
+          if [[ -n *.pkg.tar.zst(N) ]]; then
+            echo "Recriando banco de dados com pacotes existentes..."
+            repo-add "${db_name}.db.tar.gz" *.pkg.tar.zst
+          else
+            echo "Nenhum pacote encontrado para adicionar ao banco de dados"
+          fi
+
+          # Limpar arquivos órfãos
+          echo "Procurando por arquivos órfãos..."
+          find . -maxdepth 1 -type f \( -name "*.sig" -o -name "*.md5" \) | while read -r file; do
+            base_name="\${file%.*}"
+            if [ ! -f "\${base_name}" ]; then
+              echo "Removendo arquivo órfão: \${file}"
+              rm -f "\${file}"
             fi
           done
-          exit_code=$?
-          exit $exit_code
+
+          # Mostrar resultado final
+          echo "Conteúdo final do diretório:"
+          ls -la
+          
+          exit 0
         EOF
         retval="$?"
 
@@ -947,7 +970,6 @@ runs:
         msg_info "Upload Path            : ${upload_path}"
         msg_info "full_pkgname (sig)     : ${{env.PKG_PATH}}.sig"
         msg_info "full_pkgname (md5)     : ${{env.PKG_PATH}}.md5"
-        msg_info "full_pkgname (sig.md5) : ${{env.PKG_PATH}}.sig.md5"
         msg_info "release                : ${release}"
         msg_info "release_name           : ${release_name}"
         popd || true
@@ -994,7 +1016,8 @@ runs:
         replicate '='
 
     - name: Create Release
-      if: inputs.branch_type != 'testing'
+      # Modificar a condição para excluir pacotes AUR
+      if: inputs.branch_type != 'testing' && inputs.build_env != 'aur'
       id: create_release
       uses: softprops/action-gh-release@v1
       with:
@@ -1012,7 +1035,7 @@ runs:
           - **Arquivo MD5        :** ${{ env.PKGNAME_BASENAME }}.md5
           - **Nome do Repositório:** ${{ env.REPO_ORIGEM_OWNER }}/${{ env.REPO_ORIGEM_NAME }}
         repository: "${{ env.repository }}"
-        token: "${{ env.ORGANIZATION_TOKEN }}"
+        token: "${{ inputs.github_token }}"
         draft: false
         prerelease: false
         fail_on_unmatched_files: false
