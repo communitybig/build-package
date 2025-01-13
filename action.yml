@@ -580,7 +580,19 @@ runs:
           fi
 
           # Executar chrootbuild com o branch determinado
-          sudo chrootbuild -H -p . -b ${build_branch}
+          #sudo chrootbuild -H -p . -b ${build_branch}
+
+          if makepkg -s --noconfirm --noprogressbar --nodeps --skipchecksums; then
+            pkgname="${{ inputs.package_name }}"
+            full_pkgname="$(find . -type f -iname "$pkgname*.pkg.tar.zst" -print)"
+            msg_raw "full_pkgname : $full_pkgname"
+            echo "full_pkgname=$full_pkgname" >> $GITHUB_ENV
+            msg_run "cp -f $full_pkgname /home/packages/ 2>/dev/null" || msg_warning 'No package found to move'
+            msg_ok "Build completed. Checking /home/packages:"
+            msg_run 'ls -la /home/packages'
+          else
+            die "Build with makepkg fail."
+          fi
         fi
 
         # Executa comando extra, se fornecido
