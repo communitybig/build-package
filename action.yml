@@ -997,12 +997,19 @@ runs:
 
     - name: Set Repository
       id: set_repository
+      shell: bash
       run: |
+        #Set Repository
+        source /tmp/send_telegram_message.sh
+        replicate '='
         if [ "${{ github.repository_owner }}" != "${{ env.REPO_ORIGEM_OWNER }}" ]; then
-          echo "repository=${{ github.repository }}" >> $GITHUB_ENV
+          repository="${{ github.repository }}"
         else
-          echo "repository=${{ env.REPO_ORIGEM_OWNER }}/${{ env.REPO_ORIGEM_NAME }}" >> $GITHUB_ENV
+          repository="${{ env.REPO_ORIGEM_OWNER }}/${{ env.REPO_ORIGEM_NAME }}"
         fi
+        echo "repository=$repository" >> $GITHUB_ENV
+        msg_raw "repository : $repository"
+        replicate '='
 
     - name: Create Release
       if: inputs.branch_type != 'testing'
