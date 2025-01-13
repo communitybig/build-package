@@ -595,8 +595,8 @@ runs:
           fi
         fi
 
-        # Executa comando extra, se fornecido
-        if [ -n "${{ inputs.extra_command }}" ]; then
+        msg_info '# Executa comando extra, se fornecido'
+        if [[ -n "${{ inputs.extra_command }}" ]]; then
           msg_raw "Executando comando extra: ${{ inputs.extra_command }}"
           ${{ inputs.extra_command }}
         fi
@@ -659,40 +659,40 @@ runs:
         msg_run 'ls -lah $PWD *.md5' || msg_warning 'Nenhum arquivo MD5 encontrado'
         replicate '#'
 
-    - name: Push to Repo
+    - name: Push the package to the repository
       if: inputs.push_to_repo == 'true'
       shell: bash
       env:
         LANG: en_US.UTF-8
         LC_ALL: en_US.UTF-8
       run: |
-        #Push to Repo
+        #Push the package to the repository
         source /tmp/send_telegram_message.sh
+        replicate '#'
         # Setup SSH
-        mkdir -p /home/builduser/.ssh
-        ssh-keyscan -t rsa -p ${{ inputs.repo_port }} ${{ inputs.repo_host }} >> /home/builduser/.ssh/known_hosts
-        ip=${{ inputs.repo_host }}
+        msg_run 'mkdir -p /home/builduser/.ssh'
+        msg_run "ssh-keyscan -t rsa -p ${{ inputs.repo_port }} ${{ inputs.repo_host }} >> /home/builduser/.ssh/known_hosts"
+        ip="${{ inputs.repo_host }}"
 
-        if [ "${{ inputs.build_env }}" == "aur" ]; then
-          # Para pacotes AUR
-          cd /home/packages
+        if [[ "${{ inputs.build_env }}" == "aur" ]]; then
+          msg_run 'cd /home/packages'
           branch="EXTRA"  # Todos os pacotes AUR vão para EXTRA
         else
-          # Para pacotes não-AUR
-          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-          #cd $gitfolder
-          cd /home/packages
-
-          # Set the branch based on BRANCH_TYPE
-          if [ "${{ inputs.branch_type }}" == "stable" ]; then
+          msg_run 'cd /home/packages'
+          msg_info '# Set the branch based on BRANCH_TYPE'
+          case "${{ inputs.branch_type }}" in
+            "stable")
             branch="STABLE"
-          elif [ "${{ inputs.branch_type }}" == "extra" ]; then
+              ;;
+            "extra")
             branch="EXTRA"
-          else
+              ;;
+            *)
             branch="TESTING"
-          fi
+              ;;
+          esac
         fi
-        msg_run "ls -lah $PWD"
+        msg_run "ls -lha $PWD"
 
         # Upload the package files
         for i in *.pkg.tar.zst; do
@@ -702,23 +702,34 @@ runs:
           echo "PKGNAME_BASENAME=$pkgname_escaped"  >> $GITHUB_ENV
           echo "PKGNAME_BRANCH=${branch_escaped,,}" >> $GITHUB_ENV
           repo_path="${{ inputs.repo_dir }}"
-          repositorio="${{ inputs.repo_dir }}"
           file_size_bytes=$(stat -c%s "$i")
           file_size_kb=$((file_size_bytes / 1024))
+          file_size_mb=$((file_size_kb / 1024))
 
-          message="✅ <b>build-package - 2/3 - ENVIANDO 📦 PARA O REPOSITÓRIO</b>
+          message="✅ <b>[step 2/4] build-package - ENVIANDO 📦 PARA REPOSITÓRIO</b>
           <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
-          <b>Pacote:</b> <code>${pkgname_escaped}</code>
-          <b>Tamanho bytes/kb:</b> <code>${file_size_bytes}/${file_size_kb}k</code>
-          <b>Repositório:</b> <code>${branch_escaped}</code>"
+          <b>Workflow:</b> <code>build-package/action.yml</code>
+          <b>Pacote:</b> <code>${branch_escaped,,}/${pkgname_escaped}</code>
+          <b>Tamanho b/Kb/Mb:</b> <code>${file_size_bytes}/${file_size_kb}/${file_size_mb}</code>
+          <b>Repositório:</b> <code>${repo_path}</code>
+          <b>Branch:</b> <code>${branch_escaped}</code>"
+          msg_ok "$message"
           send_telegram_message "$message"
 
           if rsync --itemize-changes -apz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/; then
-            #message="✅ <b>build-package - Pacote enviado com sucesso para o repositório</b>"
+            message="✅ <b>[step 3/6] build-package - Sucesso no envio do pacote</b>
+            <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+            <b>Workflow:</b> <code>build-package/action.yml</code>
+            <b>Pacote:</b> <code>${pkgname_escaped}</code>
+            <b>Branch:</b> <code>${branch_escaped}</code>"
             #send_telegram_message "$message"
             :
           else
-            message="❌ <b>build-package - Falha ao enviar o pacote para o repositorio</b>"
+            message="❌ <b>[step 3/6] build-package - Falha ao enviar pacote</b>
+            <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+            <b>Workflow:</b> <code>build-package/action.yml</code>
+            <b>Pacote:</b> <code>${pkgname_escaped}</code>
+            <b>Branch:</b> <code>${branch_escaped}</code>"
             send_telegram_message "$message"
           fi
         done
@@ -726,6 +737,7 @@ runs:
         for i in *.sig *.md5; do
           rsync --itemize-changes -apz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/
         done
+				replicate '#'
 
     #    # Runs only if previous steps were successful
     #    - name: Update Repository Database
@@ -786,46 +798,45 @@ runs:
       run: |
         #Clean Old Packages - keeps only the most recent package
         source /tmp/send_telegram_message.sh
-
-        # Determine the branch based on the branch type
-        if [ "${{ inputs.branch_type }}" == "stable" ]; then
+        replicate '#'
+        msg_info '# Determine the branch and database name based on the branch type'
+        case "${{ inputs.branch_type }}" in
+          "stable")
           branch="STABLE"
-          db_name="community-stable"
-        elif [ "${{ inputs.branch_type }}" == "extra" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
+            db_name="community-stable"
+            ;;
+          "aur" | "extra")
           branch="EXTRA"
-          db_name="community-extra"
-        elif [ "${{ inputs.branch_type }}" == "testing" ]; then
+            db_name="community-extra"
+            ;;
+          "testing")
           branch="TESTING"
-          db_name="community-testing"
-        else
-          message="❌ <b>Error: Unknown branch type</b>
-          <code>${{ inputs.branch_type }}"
-          send_telegram_message "$message"
-          exit 1
-        fi
-
+            db_name="community-testing"
+            ;;
+          *)
+            die "${red}Error: Unknown branch type: ${{ inputs.branch_type }} ${reset}"
+            ;;
+        esac
         msg_raw "Branch       : $branch"
         msg_raw "Database name: $db_name"
         branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-        message="🧹 <b>build-package - Iniciando limpeza de pacotes antigos no repositório</b>"
+        message="🧹<b>[step 4/6] Iniciando limpeza de pacotes antigos</b>
+        <b>branch:</b> <code>${branch_escaped}</code>"
         #send_telegram_message "$message"
 
-        ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
-          #set -x
-          cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
+        ssh "${{ inputs.repo_user }}@${{ inputs.repo_host }}" -p "${{ inputs.repo_port }}" << 'EOF'
+          cd "${{ inputs.repo_dir }}/${{ inputs.branch_type }}/x86_64"
           echo "Current path: \$PWD"
           echo "ls -lah \$PWD"
 
           # Manter apenas a versão mais recente de cada pacote
-          for pkg in $(ls *.pkg.tar.zst | cut -d- -f1 | sort -u); do
-            newest=\$(ls \${pkg}-*.pkg.tar.zst | sort -V | tail -n1)
-            for old in \${pkg}-*.pkg.tar.zst; do
-              if [ "\$old" != "\$newest" ]; then
-                echo "Removing old package: \$old"
-                rm -f "\$old" "\${old}.sig" "\${old}.md5"
-              fi
-            done
+          FETCH_RE='-[^-]+[0-9]+[^.]*.pkg[^.]*.tar.zst'
+          PKG_EXT='pkg.tar.zst'
+          AllOldPackages=$(find "$PWD" -type f -iname "*.$PKG_EXT" | sort -Vr | awk -F "$FETCH_RE" 'lista[$1]++')
+          for old in ${AllOldPackages[@]}; do
+            echo -e "${red}=>Removendo pacote antigo : [$((++count))]=>${old} ${reset}"
+            rm -fv "${old}" "${old}.sig" "${old}.md5" "${old}.sig.md5"
           done
 
           # Remover os bancos de dados existentes
@@ -834,12 +845,13 @@ runs:
           # Recriar o banco de dados com os pacotes presentes
           repo-add ${db_name}.db.tar.gz *.pkg.tar.zst
 
-          # Remover arquivos .sig e .md5 órfãos
-          for file in *.sig *.md5; do
-            base_name=\${file%.*}
-            if [ ! -f "\${base_name}" ]; then
-              echo "Removing orphaned file: \$file"
-              rm -f "\$file"
+          # Remover arquivos .sig, .md5 e .sig.md5 órfãos
+          for file in *.sig *.md5 *.sig.md5; do
+            base_name=${file%.*}
+            echo -e "\033[01;32m=>Procurando por arquivo orfão : $file ${RESET}"
+            if [[ ! -f "${base_name}" ]]; then
+							echo -e "\033[01;31m=>Removendo arquivo orfão : $file ${RESET}"
+              rm -fv "$file"
             fi
           done
           exit_code=$?
