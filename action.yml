@@ -646,14 +646,12 @@ runs:
         msg_run "ls -lah $PWD"
 
         for p in *pkg.tar.zst; do
-          msg_info "Gerando MD5 para: $p"
-          md5sum "$p"     >> "$p.md5"
-          msg_info "Gerando MD5 para: $p.sig"
-          if md5sum "$p.sig" >> "$p.sig.md5"; then
-            msg_ok "MD5 gerado para: $p.sig"
-          else
-            msg_warning "Falha na geração de MD5 para: $p.sig"
-          fi
+          [ -e "$p" ] || continue  # Pula se não existir arquivo
+          msg_info "Gerando MD5 para: $p e $p.sig"
+          {
+            md5sum "$p"
+            [ -f "$p.sig" ] && md5sum "$p.sig"
+          } > "$p.md5"
         done
         msg_run 'ls -lah $PWD *.md5' || msg_warning 'Nenhum arquivo MD5 encontrado'
         replicate '#'
@@ -835,7 +833,7 @@ runs:
           AllOldPackages=$(find "$PWD" -type f -iname "*.$PKG_EXT" | sort -Vr | awk -F "$FETCH_RE" 'lista[$1]++')
           for old in ${AllOldPackages[@]}; do
             echo -e "${red}=>Removendo pacote antigo : [$((++count))]=>${old} ${reset}"
-            rm -fv "${old}" "${old}.sig" "${old}.md5" "${old}.sig.md5"
+            rm -fv "${old}" "${old}.sig" "${old}.md5"
           done
 
           # Remover os bancos de dados existentes
@@ -844,8 +842,8 @@ runs:
           # Recriar o banco de dados com os pacotes presentes
           repo-add ${db_name}.db.tar.gz *.pkg.tar.zst
 
-          # Remover arquivos .sig, .md5 e .sig.md5 órfãos
-          for file in *.sig *.md5 *.sig.md5; do
+          # Remover arquivos .sig e .md5 órfãos
+          for file in *.sig *.md5; do
             base_name=${file%.*}
             echo -e "\033[01;32m=>Procurando por arquivo orfão : $file ${RESET}"
             if [[ ! -f "${base_name}" ]]; then
