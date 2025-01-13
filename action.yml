@@ -434,7 +434,7 @@ runs:
             msg_run 'cd aur_package'
 
             # Extrair informações do repositório clonado
-            REPO_URL="${{ inputs.repo_origem }}"
+            REPO_ORIGEM_URL="${{ inputs.repo_origem }}"
             REPO_ORIGEM_NAME=$(basename -s .git "$REPO_ORIGEM_URL")
             REPO_ORIGEM_OWNER=$(echo "$REPO_ORIGEM_URL" | awk -F[/:] '{print $(NF-1)}')
 
@@ -454,7 +454,7 @@ runs:
           msg_run 'cd source_repo'
 
           # Extrair informações do repositório clonado
-          REPO_URL="${{ inputs.repo_origem }}"
+          REPO_ORIGEM_URL="${{ inputs.repo_origem }}"
           REPO_ORIGEM_NAME=$(basename -s .git "$REPO_ORIGEM_URL")
           REPO_ORIGEM_OWNER=$(echo "$REPO_ORIGEM_URL" | awk -F[/:] '{print $(NF-1)}')
 
