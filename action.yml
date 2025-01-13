@@ -161,7 +161,7 @@ runs:
             local before_colon="${msg%%:*}:"
             local after_colon="${msg#*: }"
             # Aplica as cores
-            msg="${cyan}${before_colon} ${red}${after_colon}${reset}"
+            msg="${cyan}${before_colon} ${yellow}${after_colon}${reset}"
           else
             # Se não houver ':', aplica apenas a cor padrão
             msg="${cyan}${msg}${reset}"
@@ -223,7 +223,7 @@ runs:
           [[ -z $parse_mode ]] && parse_mode="HTML"
 
           # Remove as tags HTML e exibe o resultado no terminal
-          echo -e "${red}$(sed 's/<[^>]*>//g' <<< "$message")${reset}"
+          echo -e "${green}$(sed 's/<[^>]*>//g' <<< "$message")${reset}"
           # Envia a mensagem original com HTML para o Telegram
           curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
             -d chat_id="${{ inputs.telegram_chat_id }}" \
@@ -478,7 +478,7 @@ runs:
         source /tmp/send_telegram_message.sh
         replicate '#'
         msg_raw "Build environment: ${{ inputs.build_env }}"
-        msg_raw "Package name: ${{ inputs.package_name }}"
+        msg_raw "Package name     : ${{ inputs.package_name }}"
 
         msg_info '# Create and set permissions for $PKGDEST and $SRCDEST'
         msg_run 'sudo mkdir -p /home/packages /home/sources /tmp/makepkg'
@@ -509,21 +509,21 @@ runs:
 
           # Detect and import GPG keys if present in PKGBUILD
           if [ -f "PKGBUILD" ]; then
-            echo "Checking for required PGP keys..."
+            msg_info "Checking for required PGP keys..."
             if grep -q "validpgpkeys" PKGBUILD; then
               # Extract GPG key from PKGBUILD
               key=$(grep "validpgpkeys" PKGBUILD | sed 's/.*(\"\(.*\)\")/\1/')
 
               if [ ! -z "$key" ]; then
-                echo "Importing GPG key: $key"
+                msg_raw "Importing GPG key: $key"
                 # Try multiple keyservers to ensure key import succeeds
                 gpg --keyserver keyserver.ubuntu.com --recv-keys "$key" || \
                 gpg --keyserver keys.gnupg.net --recv-keys "$key" || \
                 gpg --keyserver hkp://pgp.mit.edu --recv-keys "$key" || \
-                echo "Warning: Failed to import key $key"
+                msg_warning "Warning: Failed to import key $key"
               fi
             else
-              echo "No PGP keys defined in PKGBUILD"
+              msg_info "No PGP keys defined in PKGBUILD"
             fi
           fi
 
@@ -537,24 +537,23 @@ runs:
 
           # Install all dependencies using yay
           install_dependencies() {
-              if [ -n "$depends" ] || [ -n "$makedepends" ]; then
-                  echo "Installing all dependencies..."
-                  yay -Sy --asdeps --needed --noanswerdiff --noconfirm "${depends[@]}" "${makedepends[@]}" || {
-                      echo "Error installing dependencies"
-                      return 1
-                  }
-              fi
-              return 0
+            if [ -n "$depends" ] || [ -n "$makedepends" ]; then
+              msg_info "Installing all dependencies..."
+              yay -Sy --asdeps --needed --noanswerdiff --noconfirm "${depends[@]}" "${makedepends[@]}" || {
+                msg_warning "Error installing dependencies"
+                return 1
+              }
+            fi
+            return 0
           }
 
           # Call the installation function
           if ! install_dependencies; then
-              echo "Failed to install dependencies"
-              exit 1
+            die "Failed to install dependencies"
           fi
 
           # Build the package without installing
-          echo "Building AUR package: ${{ inputs.package_name }}"
+          msg_raw "Building AUR package: ${{ inputs.package_name }}"
           makepkg -s --noconfirm --noprogressbar --nodeps
         else
           # Para pacotes não-AUR
@@ -569,13 +568,12 @@ runs:
 
           # Ensure architecture is set to x86_64
           sed -i "/^arch=/c\arch=('x86_64')" PKGBUILD
+          msg_info "Build arch=x86_64"
 
-          # Build for x86_64
-          echo -e "\033[01;31mBuild x86_64\033[0m"
           # Determinar o branch de build
           if [ "${{ inputs.build_env }}" == "extra" ]; then
             build_branch="testing"
-            echo "Ambiente de build é 'extra', usando branch 'testing' para chrootbuild"
+            msg_info "Ambiente de build é 'extra', usando branch 'testing' para chrootbuild"
           else
             #build_branch="${{ inputs.branch_type }}"
             build_branch="stable"
@@ -587,13 +585,12 @@ runs:
 
         # Executa comando extra, se fornecido
         if [ -n "${{ inputs.extra_command }}" ]; then
-          echo "Executando comando extra: ${{ inputs.extra_command }}"
+          msg_raw "Executando comando extra: ${{ inputs.extra_command }}"
           ${{ inputs.extra_command }}
         fi
 
         # Move the compiled package to /home/packages
-        #cd $gitfolder
-        mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
+        mv *.pkg.tar.zst /home/packages/ 2>/dev/null || msg_warning 'No package found to move'
 
         msg_info '# Debug: Mostrar conteúdo do diretório após o build'
         msg_run "ls -la $PWD"
@@ -640,8 +637,11 @@ runs:
           msg_info "Gerando MD5 para: $p"
           md5sum "$p"     >> "$p.md5"
           msg_info "Gerando MD5 para: $p.sig"
-          md5sum "$p.sig" >> "$p.sig.md5"
-          msg_info "MD5 gerado para: $p.sig"
+          if md5sum "$p.sig" >> "$p.sig.md5"; then
+            msg_ok "MD5 gerado para: $p.sig"
+          else
+            msg_warning "Falha na geração de MD5 para: $p.sig"
+          fi
         done
         msg_run 'ls -lah $PWD *.md5' || msg_warning 'Nenhum arquivo MD5 encontrado'
         replicate '#'
