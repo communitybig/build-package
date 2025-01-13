@@ -659,63 +659,6 @@ runs:
         msg_run 'ls -lah $PWD *.md5' || msg_warning 'Nenhum arquivo MD5 encontrado'
         replicate '#'
 
-    - name: Publish Package on GitHub
-      if: inputs.publish_github == 'true' && inputs.build_env != 'aur'
-      shell: bash
-      run: |
-        #Publish Package on GitHub
-        source /tmp/send_telegram_message.sh
-        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
-        #cd $gitfolder
-        cd /home/packages
-        msg_run "ls -lah $PWD"
-
-        # Skip linux-zen packages
-        if [ -n "$(grep linux-zen <<< $gitfolder)" ];then
-          exit 0
-        fi
-
-        # # Determine the last committer
-        # lastCommit=$(git log -1 --format="%an <%ae>")
-        # if [ "$(grep github-actions <<< $lastCommit)" ];then
-        #   lastCommit=$(git log -2 --format="%an <%ae>")
-        # fi
-
-        # Set up GitHub authentication and determine the repository
-        if [ -n "${{ inputs.url }}" ]; then
-          echo "${{ inputs.github_token }}" | gh auth login --with-token
-          repo=$(echo "${{ inputs.url }}" | sed 's|https://github.com/||')
-        else
-          echo "${{ inputs.github_token }}" | gh auth login --with-token
-          repo="${{ inputs.repo }}"
-        fi
-
-        # Fallback to github.repository if repo is still empty
-        if [ -z "$repo" ]; then
-          repo="${{ github.repository }}"
-        fi
-
-        # Create and upload the release
-        ls *.pkg* | head -n1 | sed 's/.pkg.*//' > release
-        release=$(cat release)
-
-        echo "release=$release"
-        echo "repo=$repo"
-        echo "url=${{ inputs.url }}"
-
-        if [ -n "$repo" ] && [ -n "$release" ]; then
-          echo "Using repository: $repo"
-          echo "Creating release: $release"
-          gh release create ${release} --title ${release} --repo ${repo} --notes "automated release from ${{ inputs.url }}" || echo "release already exists"
-          for i in .zst .sig .tar .md5; do
-            find -iname "*$i" -exec gh release upload ${release} --repo ${repo} --clobber {} \;
-          done
-        else
-          echo "Error: repo or release is empty"
-          exit 1
-        fi
-
-    # Push the package to the repository
     - name: Push to Repo
       if: inputs.push_to_repo == 'true'
       shell: bash
@@ -739,12 +682,6 @@ runs:
           gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
           #cd $gitfolder
           cd /home/packages
-
-          # Determine the last committer (apenas para pacotes não-AUR)
-          # lastCommit=$(git log -1 --format="%an <%ae>")
-          # if [ "$(grep github-actions <<< $lastCommit)" ];then
-          #   lastCommit=$(git log -2 --format="%an <%ae>")
-          # fi
 
           # Set the branch based on BRANCH_TYPE
           if [ "${{ inputs.branch_type }}" == "stable" ]; then
@@ -787,7 +724,7 @@ runs:
         done
 
         for i in *.sig *.md5; do
-          rsync -vapz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/
+          rsync --itemize-changes -apz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/
         done
 
     # Runs only if previous steps were successful
@@ -808,20 +745,19 @@ runs:
           branch="TESTING"
           db_name="community-testing"
         else
-          echo "${red}Error: Unknown branch type: ${{ inputs.branch_type }} ${reset}"
-          exit 1
+          die "Error: Unknown branch type: ${{ inputs.branch_type }}"
         fi
 
-        echo "Branch: $branch"
-        echo "Database name: $db_name"
+        msg_raw "Branch       : $branch"
+        msg_raw "Database name: $db_name"
         branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
         db_name_escaped=$(echo "$db_name" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-        #message="🔄 <b>build-package - Iniciando sincronização do banco de dados no repositório</b>"
+        message="🔄 <b>build-package - Iniciando sincronização do banco de dados no repositório</b>"
         #send_telegram_message "$message"
 
         ssh -v ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
-          set -x
+          #set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
           repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
           exit_code=\$?
@@ -869,7 +805,7 @@ runs:
         msg_raw "Database name: $db_name"
         branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-        #message="🧹 <b>build-package - Iniciando limpeza de pacotes antigos no repositório</b>"
+        message="🧹 <b>build-package - Iniciando limpeza de pacotes antigos no repositório</b>"
         #send_telegram_message "$message"
 
         ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
