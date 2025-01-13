@@ -734,6 +734,7 @@ runs:
       run: |
         #Update Repository Database
         source /tmp/send_telegram_message.sh
+        replicate '#'
         # Determine the database name based on the branch type
         if [ "${{ inputs.branch_type }}" == "stable" ]; then
           branch="STABLE"
@@ -756,7 +757,7 @@ runs:
         message="🔄 <b>build-package - Iniciando sincronização do banco de dados no repositório</b>"
         #send_telegram_message "$message"
 
-        ssh -v ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
+        ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           #set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
           repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
@@ -775,13 +776,13 @@ runs:
           message="❌ <b>build-package - Falha na sincronização do banco de dados no repositório</b>"
           send_telegram_message "$message"
         fi
+        replicate '#'
 
-    # Keeps only the most recent package
     - name: Clean Old Packages
       if: inputs.update_db == 'true' && success()
       shell: bash
       run: |
-        #Clean Old Packages
+        #Clean Old Packages - keeps only the most recent package
         source /tmp/send_telegram_message.sh
 
         # Determine the branch based on the branch type
@@ -811,13 +812,15 @@ runs:
         ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           #set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
+          msg_info "Current path: $PWD"
+          msg_run "lh -lah $PWD"
 
           # Manter apenas a versão mais recente de cada pacote
           for pkg in $(ls *.pkg.tar.zst | cut -d- -f1 | sort -u); do
             newest=\$(ls \${pkg}-*.pkg.tar.zst | sort -V | tail -n1)
             for old in \${pkg}-*.pkg.tar.zst; do
               if [ "\$old" != "\$newest" ]; then
-                echo "${red}Removing old package: \$old ${reset}"
+                msg_warning "Removing old package: \$old"
                 rm -f "\$old" "\${old}.sig" "\${old}.md5"
               fi
             done
@@ -833,7 +836,7 @@ runs:
           for file in *.sig *.md5; do
             base_name=\${file%.*}
             if [ ! -f "\${base_name}" ]; then
-              echo "Removing orphaned file: \$file"
+              msg_warning "Removing orphaned file: \$file"
               rm -f "\$file"
             fi
           done
