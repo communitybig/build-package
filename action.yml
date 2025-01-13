@@ -760,8 +760,8 @@ runs:
         ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           #set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
-          echo "Current path: $PWD"
-          echo "lh -lah $PWD"
+          echo "Current path: \$PWD"
+          echo "lh -lah \$PWD"
           repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
           exit_code=\$?
           exit \$exit_code
@@ -814,8 +814,8 @@ runs:
         ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
           #set -x
           cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
-          echo "Current path: $PWD"
-          echo "lh -lah $PWD"
+          echo "Current path: \$PWD"
+          echo "lh -lah \$PWD"
 
           # Manter apenas a versão mais recente de cada pacote
           for pkg in $(ls *.pkg.tar.zst | cut -d- -f1 | sort -u); do
