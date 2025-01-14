@@ -116,22 +116,22 @@ inputs:
     description: "Nome completo do branch de origem"
     required: false
 
-# Definição dos passos da ação
+# Action steps definition
 runs:
   using: "composite"
   steps:
-    - name: Definir a função send_telegram_message no script temporário
+    - name: Define send_telegram_message function in temporary script
       shell: bash
       env:
         TELEGRAM_TOKEN: "${{ inputs.telegram_token }}"
         TELEGRAM_CHAT_ID: "${{ inputs.telegram_chat_id }}"
       run: |
-        #Definir a função send_telegram_message no script temporário
+        # Define send_telegram_message function in temporary script
         cat << 'EOF' > /tmp/send_telegram_message.sh
         export TERM=${TERM:-xterm}
         export TERM=${TERM:-xterm-256color}
 
-        #Definindo variáveis de cores
+        # Defining color variables
         export red="\033[01;31m"
         export green="\033[01;32m"
         export yellow="\033[01;33m"
@@ -144,7 +144,7 @@ runs:
 
         die() {
           local msg="$1"
-          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove as tags HTML
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
           echo -e "BP=>${cyan}error: ${red}${msg}${reset}"
           exit  1
         }
@@ -152,18 +152,18 @@ runs:
 
         msg_raw() {
           local msg="$1"
-          # Remove tags HTML, se existirem
+          # Remove HTML tags if they exist
           #msg="$(sed 's/<[^>]*>//g' <<< "$msg")"
 
-          # Verifica se existe ':' na mensagem
+          # Check if message contains ':'
           if [[ "$msg" == *:* ]]; then
-            # Divide a string antes e depois do primeiro ':'
+            # Split string before and after first ':'
             local before_colon="${msg%%:*}:"
             local after_colon="${msg#*: }"
-            # Aplica as cores
+            # Apply colors
             msg="${cyan}${before_colon} ${yellow}${after_colon}${reset}"
           else
-            # Se não houver ':', aplica apenas a cor padrão
+            # If no ':', apply default color
             msg="${cyan}${msg}${reset}"
           fi
           echo -e "$msg"
@@ -172,15 +172,15 @@ runs:
 
         msg() {
           local msg="$1"
-          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove as tags HTML
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
           echo -e "BP=>${cyan}running: ${yellow}${msg}${reset}"
         }
         export -f msg
 
         msg_ok() {
           local msg="$1"
-          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove as tags HTML
-          echo -e "BP=>${cyan}feito: ${green}${msg}${reset}"
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
+          echo -e "BP=>${cyan}done: ${green}${msg}${reset}"
         }
         export -f msg_ok
 
@@ -193,14 +193,14 @@ runs:
 
         msg_info() {
           local msg="$1"
-          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove as tags HTML
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
           echo -e "BP=>${yellow}info   : ${cyan}${msg}${reset}"
         }
         export -f msg_info
 
         msg_warning() {
           local msg="$1"
-          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove as tags HTML
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
           echo -e "BP=>${red}warning: ${orange}${msg}${reset}"
         }
         export -f msg_warning
@@ -209,8 +209,6 @@ runs:
           local char=${1:-'#'}
           local nsize=${2:-$(tput cols)}
           local line
-          #printf -v line "%*s" "$nsize" && echo "${line// /$char}"
-          #printf -v line "%*s" "$nsize" && echo -e "\033[31m${line// /$char}\033[0m"
           printf -v line "%*s" "$nsize" && echo -e "${blue}${line// /$char}${reset}"
         }
         export -f replicate
@@ -219,12 +217,12 @@ runs:
           local message="$1"
           local parse_mode="$2"
 
-          # Define parse_mode como "MarkdownV2" se não for especificado
+          # Set parse_mode as "MarkdownV2" if not specified
           [[ -z $parse_mode ]] && parse_mode="HTML"
 
-          # Remove as tags HTML e exibe o resultado no terminal
+          # Remove HTML tags and display result in terminal
           echo -e "${green}$(sed 's/<[^>]*>//g' <<< "$message")${reset}"
-          # Envia a mensagem original com HTML para o Telegram
+          # Send original message with HTML to Telegram
           curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
             -d chat_id="${{ inputs.telegram_chat_id }}" \
             -d text="$message" \
@@ -233,42 +231,38 @@ runs:
         export -f send_telegram_message
         EOF
 
-    - name: Obter o hash do último commit do repositório remoto
+    - name: Get last commit hash from remote repository
       shell: bash
       run: |
-        # Obter o hash do último commit do repositório remoto
+        # Get last commit hash from remote repository
         source /tmp/send_telegram_message.sh
         replicate '='
         REPO_URL="${{ inputs.url }}"
         echo "REPO_URL=$REPO_URL" >> $GITHUB_ENV
         COMMIT_HASH="$(git ls-remote $REPO_URL HEAD | awk '{print $1}')"
-        #echo "COMMIT_HASH=$COMMIT_HASH" >> $GITHUB_ENV
         msg_raw "Last commit hash: $COMMIT_HASH"
 
-        # Buscar informações do commit remoto
+        # Fetch remote commit information
         git fetch $REPO_URL $COMMIT_HASH
 
-        # Obter a mensagem do commit a partir do hash
+        # Get commit message from hash
         COMMIT_MESSAGE="$(git log -1 --format=%B $COMMIT_HASH)"
-        #echo "COMMIT_MESSAGE=$COMMIT_MESSAGE" >> $GITHUB_ENV
         msg_raw "Last commit message: $COMMIT_MESSAGE"
         replicate '='
 
     - name: Inicializando a criação de pacote
       shell: bash
       run: |
-        #Inicializando a criação de pacote
+        # Initializing package creation
         source /tmp/send_telegram_message.sh
         replicate '='
-        #https://docs.github.com/pt/enterprise-server@3.10/actions/writing-workflows/choosing-what-your-workflow-does/accessing-contextual-information-about-workflow-runs
+        # https://docs.github.com/pt/enterprise-server@3.10/actions/writing-workflows/choosing-what-your-workflow-does/accessing-contextual-information-about-workflow-runs
         pkgname="${{ inputs.package_name }}"
         branch="${{ inputs.branch_type }}"
         repo_path="${{ inputs.repo_dir }}"
         repo_origem="${{ inputs.url }}"
         started_by_user="${{ github.actor }}"
         triggered_by_user="${{ github.triggering_actor }}"
-        #pkgname_escaped=$(echo "$pkgname" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
-        #branch_escaped=$(echo "${branch^^}" | sed 's/[_*[\]()~`>#+\-=|{}.!]/\\&/g')
         pkgname_escaped="$pkgname"
         branch_escaped="${branch}"
 
@@ -280,7 +274,6 @@ runs:
         <b>Origem:</b> <code>${repo_origem}</code>
         <b>Iniciado/Triggered:</b> <code>${started_by_user}/${triggered_by_user}</code>
         <b>Branch:</b> <code>${branch_escaped}</code>"
-        #send_telegram_message "$message"
         msg_info "$message"
         replicate '='
 
@@ -302,25 +295,13 @@ runs:
     - name: Setup build environment
       shell: bash
       run: |
-        #Config ambiente de build - Atualiza e instala dependências necessárias
+        # Configure build environment - Update and install required dependencies
         source /tmp/send_telegram_message.sh
         replicate '='
-        #sudo pacman -Syu --quiet --needed --noconfirm \
-        #   base-devel \
-        #   cmake \
-        #   libarchive \
-        #   meson \
-        #   ninja \
-        #   yay \
-        #   tmate \
-        #   ncurses \
-        #   duf \
-        #   curl \
-        #   tree
         msg_run 'sudo pacman -Syu --quiet --needed --noconfirm --overwrite \*'
         replicate '='
 
-        # Verifica as versões instaladas
+        # Check installed versions
         meson --version
         ninja --version
 
@@ -347,10 +328,10 @@ runs:
     - name: Configure System and Repositories
       shell: bash
       run: |
-        #Configure System and Repositories
+        # Configure System and Repositories
         source /tmp/send_telegram_message.sh
         replicate '#'
-        msg_info "#Set up pacman mirror"
+        msg_info "# Set up pacman mirror"
         msg_raw "Usando mirror especificado: ${{ inputs.pacman_mirror }}"
         echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee -a /etc/pacman.d/mirrorlist
         echo 'Server = https://linorg.usp.br/manjaro/testing/$repo/$arch' | sudo tee -a /etc/pacman.d/mirrorlist
@@ -362,10 +343,10 @@ runs:
         msg_run 'cat /etc/pacman.conf'
         replicate '-'
 
-        msg_info "#Remove existing BigLinux repositories"
+        msg_info "# Remove existing BigLinux repositories"
         sudo sed -i '/biglinux/,$d' /etc/pacman.conf
 
-        msg_info "#Add repositories on build environment"
+        msg_info "# Add repositories on build environment"
         declare -A entries=(
           [community-stable]='https://repo.communitybig.org/stable/$arch'
           [community-testing]='https://repo.communitybig.org/testing/$arch'
@@ -387,12 +368,12 @@ runs:
 
         if [ "${{ inputs.build_env }}" == "aur" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
           msg_raw "Configurando para pacote AUR: ${{ inputs.package_name }}"
-          msg_info '#Configurações específicas para AUR'
+          msg_info '# Configurações específicas para AUR'
           sudo sed -i 's/^#MAKEFLAGS="-j2"/MAKEFLAGS="-j$(nproc)"/' /etc/makepkg.conf
           sudo sed -i 's/^#BUILDDIR/BUILDDIR/' /etc/makepkg.conf
           sudo sed -i 's/^#PKGDEST/PKGDEST/' /etc/makepkg.conf
 
-          msg_info '#Habilitar o repositório multilib (necessário para alguns pacotes AUR)'
+          msg_info '# Habilitar o repositório multilib (necessário para alguns pacotes AUR)'
           sudo sed -i '/\[multilib\]/,/Include/s/^#//' /etc/pacman.conf
         fi
 
@@ -405,7 +386,7 @@ runs:
         sudo sed -i 's|https://repo.manjaro.org/repo|https://nnenix.mm.fcix.net/manjaro|' /usr/lib/manjaro-chrootbuild/util.sh
         sudo sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
 
-        msg_info '#Instalar dependências comumente necessárias para builds'
+        msg_info '# Instalar dependências comumente necessárias para builds'
         msg_run "sudo pacman -Sy --needed base-devel git --noconfirm"
 
         replicate '#'
@@ -609,7 +590,7 @@ runs:
     - name: Sign Package
       shell: bash
       run: |
-        #Sign Package
+        # Sign Package
         source /tmp/send_telegram_message.sh
         replicate '#'
         msg_run 'cd /home/packages'
@@ -635,7 +616,7 @@ runs:
     - name: Generate checksums
       shell: bash
       run: |
-        #Generate checksums
+        # Generate checksums
         source /tmp/send_telegram_message.sh
         replicate '#'
         msg_run 'cd /home/packages'
@@ -659,7 +640,7 @@ runs:
         LANG: en_US.UTF-8
         LC_ALL: en_US.UTF-8
       run: |
-        #Push the package to the repository
+        # Push the package to the repository
         source /tmp/send_telegram_message.sh
         replicate '#'
         # Setup SSH
@@ -732,64 +713,11 @@ runs:
         done
         replicate '#'
 
-    #    # Runs only if previous steps were successful
-    #    - name: Update Repository Database
-    #      if: inputs.update_db == 'true' && success()
-    #      shell: bash
-    #      run: |
-    #        #Update Repository Database
-    #        source /tmp/send_telegram_message.sh
-    #        replicate '#'
-    #        # Determine the database name based on the branch type
-    #        if [ "${{ inputs.branch_type }}" == "stable" ]; then
-    #          branch="STABLE"
-    #          db_name="community-stable"
-    #        elif [ "${{ inputs.branch_type }}" == "extra" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
-    #          branch="EXTRA"
-    #          db_name="community-extra"
-    #        elif [ "${{ inputs.branch_type }}" == "testing" ]; then
-    #          branch="TESTING"
-    #          db_name="community-testing"
-    #        else
-    #          die "Error: Unknown branch type: ${{ inputs.branch_type }}"
-    #        fi
-    #
-    #        msg_raw "Branch       : $branch"
-    #        msg_raw "Database name: $db_name"
-    #        branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-    #        db_name_escaped=$(echo "$db_name" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-    #
-    #        message="🔄 <b>build-package - Iniciando sincronização do banco de dados no repositório</b>"
-    #        #send_telegram_message "$message"
-    #
-    #        ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
-    #          #set -x
-    #          cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
-    #          echo "Current path: \$PWD"
-    #          echo "ls -lah \$PWD"
-    #          repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
-    #          exit_code=\$?
-    #          exit \$exit_code
-    #        EOF
-    #        retval="$?"
-    #
-    #        if [[ $retval -eq 0 ]]; then
-    #          msg_ok "Comando repo-add concluído com código de saída: $retval"
-    #          message="✅ <b>build-package - Sincronização do banco de dados no repositório concluida com sucesso</b>"
-    #          #send_telegram_message "$message"
-    #          :
-    #        else
-    #          msg_warning "Comando repo-add concluído com código de saída: $retval"
-    #          message="❌ <b>build-package - Falha na sincronização do banco de dados no repositório</b>"
-    #          send_telegram_message "$message"
-    #        fi
-    #        replicate '#'
-
     - name: Clean Old Packages
       if: inputs.update_db == 'true' && success()
       shell: bash
       run: |
-        #Clean Old Packages - keeps only the most recent package
+        # Clean Old Packages - keeps only the most recent package
         source /tmp/send_telegram_message.sh
         replicate '#'
         msg_info '# Determine the branch and database name based on the branch type'
@@ -901,11 +829,10 @@ runs:
       id: set-tag-name
       shell: bash
       run: |
-        #Extrair data do nome do arquivo .zst e definir tag_name
+        # Extract date from .zst file name and set tag_name
         source /tmp/send_telegram_message.sh
         replicate '#'
         FILENAME="${{env.PKGNAME_BASENAME}}"
-        #TAG_NAME=$(echo "$FILENAME" | grep -oP '\d{2}\.\d{2}\.\d{2}|\d{8}' | sed -E 's/(\d{2})\.(\d{2})\.(\d{2})/20\1\2\3/')-$(date +%H%M)
         TAG_NAME="${{env.TAG_NAME}}"
         echo "PKG_TAG_NAME=$TAG_NAME"                            >> $GITHUB_ENV
         echo "pkg_path=/home/packages/${{env.PKGNAME_BASENAME}}" >> $GITHUB_OUTPUT
@@ -923,7 +850,7 @@ runs:
       id: prepare-package
       shell: bash
       run: |
-        #Prepare Package for release (7z)
+        # Prepare Package for release (7z)
         source /tmp/send_telegram_message.sh
         replicate '#'
         pushd /home/packages || true
@@ -975,7 +902,7 @@ runs:
       if: ${{ inputs.teste_input != true }}
       shell: bash
       run: |
-        # Verificar se o arquivo package foi gerado corretamente
+        # Verify if the package was generated correctly
         source /tmp/send_telegram_message.sh
         replicate '='
         pushd /home/packages || true
@@ -987,7 +914,7 @@ runs:
       id: set_repository
       shell: bash
       run: |
-        #Set Repository
+        # Set Repository
         source /tmp/send_telegram_message.sh
         replicate '='
         msg_raw "REPO_ORIGEM_OWNER      : ${{ env.REPO_ORIGEM_OWNER }}"
@@ -1012,7 +939,6 @@ runs:
         replicate '='
 
     - name: Create Release
-      # Exclude testing branch and aur packages
       if: inputs.branch_type != 'testing' && inputs.build_env != 'aur'
       id: create_release
       uses: softprops/action-gh-release@v1
@@ -1027,11 +953,11 @@ runs:
         name: ${{ steps.prepare-package.outputs.release_name }}
         generate_release_notes: true
         body: |
-          - **Data e Hora        :** ${{ env.START_TIME }}
-          - **Arquivo PKG        :** ${{ env.PKGNAME_BASENAME }}
-          - **Arquivo SIG        :** ${{ env.PKGNAME_BASENAME }}.sig
-          - **Arquivo MD5        :** ${{ env.PKGNAME_BASENAME }}.md5
-          - **Nome do Repositório:** ${{ env.REPO_ORIGEM_OWNER }}/${{ env.REPO_ORIGEM_NAME }}
+          - **Date and Time    :** ${{ env.START_TIME }}
+          - **PKG File         :** ${{ env.PKGNAME_BASENAME }}
+          - **SIG File         :** ${{ env.PKGNAME_BASENAME }}.sig
+          - **MD5 File         :** ${{ env.PKGNAME_BASENAME }}.md5
+          - **Repository Name  :** ${{ env.REPO_ORIGEM_OWNER }}/${{ env.REPO_ORIGEM_NAME }}
         repository: ${{ env.repository }}
         token: ${{ inputs.github_token }}
         draft: false
@@ -1042,7 +968,7 @@ runs:
       if: failure()
       shell: bash
       run: |
-        #Send a Telegram alert if the build fails
+        # Send a Telegram alert if the build fails
         source /tmp/send_telegram_message.sh
         replicate '#'
         link_action=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -1058,12 +984,12 @@ runs:
     - name: Capturar hora de término e calcular duração
       shell: bash
       run: |
-        #Capturar hora de término e calcular duração
+        # Capture end time and calculate duration
         source /tmp/send_telegram_message.sh
         replicate '#'
         START_TIME="${{ inputs.start_time }}"
         START_TIMESTAMP="${{ inputs.start_timestamp }}"
-        END_TIME=$(date +"%Y-%m-%d %H:%M:%S")  # Hora completa
+        END_TIME=$(date +"%Y-%m-%d %H:%M:%S")  # Full time
         END_TIMESTAMP=$(date +%s)
         duration=$((END_TIMESTAMP - START_TIMESTAMP))
 
