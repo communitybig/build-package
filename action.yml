@@ -777,25 +777,17 @@ runs:
           process_old_packages
 
           # Remover os bancos de dados existentes
-          echo "Atualizando banco de dados..."
-          rm -f "${db_name}.db.tar.gz" "${db_name}.files.tar.gz"
-          rm -f "${db_name}.db" "${db_name}.files"
+          rm -f ${db_name}.db.tar.gz ${db_name}.files.tar.gz
 
           # Recriar o banco de dados com os pacotes presentes
-          if [[ -n *.pkg.tar.zst(N) ]]; then
-            echo "Recriando banco de dados com pacotes existentes..."
-            repo-add -n -R "${db_name}.db.tar.gz" *.pkg.tar.zst
-          else
-            echo "Nenhum pacote encontrado para adicionar ao banco de dados"
-          fi
+          repo-add ${db_name}.db.tar.gz *.pkg.tar.zst
 
-          # Remover arquivos órfãos
-          echo "Procurando por arquivos órfãos..."
-          find . -maxdepth 1 -type f \( -name "*.sig" -o -name "*.md5" \) | while read -r file; do
-            base_name="${file%.*}"
-            if [ ! -f "${base_name}" ]; then
-              echo "Removendo arquivo órfão: ${file}"
-              rm -f "${file}"
+          # Remover arquivos .sig e .md5 órfãos
+          for file in *.sig *.md5; do
+            base_name=\${file%.*}
+            if [ ! -f "\${base_name}" ]; then
+              echo "Removing orphaned file: \$file"
+              rm -f "\$file"
             fi
           done
 
