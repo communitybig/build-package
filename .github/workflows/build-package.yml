@@ -63,6 +63,10 @@ jobs:
     permissions:
       contents: write
       packages: write
+      actions: write
+      deployments: write
+      issues: write
+      pull-requests: write
     container:
       image: talesam/community-build:1.6
       options: --privileged
@@ -186,7 +190,7 @@ jobs:
           tmate: ${{ github.event.inputs.tmate || false }}
 
           # Tokens e chaves de segurança
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.REPOSITORY_TOKEN || secrets.GITHUB_TOKEN }}
           gpg_key: ${{ secrets.GPG_PRIVATE_KEY }}
           gpg_passphrase: ${{ secrets.PASSPHRASE }}
           telegram_token: ${{ secrets.TOKEN_BOT }}
