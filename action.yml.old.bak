@@ -1,0 +1,997 @@
+name: "Community Package Build Action"
+description: "Builds Manjaro/Community Packages"
+
+inputs:
+  build_env:
+    description: "Build environment (testing, extra, stable, or aur)"
+    required: true
+    default: "testing"
+  source:
+    description: "Custom package repo source"
+    required: false
+  manjaro_branch:
+    description: "Manjaro branch to build"
+    default: stable
+    required: false
+  custom_repo:
+    description: "Custom repo"
+    required: false
+  multilib:
+    description: "Build multilib package"
+    required: false
+    default: "false"
+  repo:
+    description: "Package repo"
+    required: true
+  gpg_key:
+    description: "GPG signing key"
+    required: true
+  gpg_passphrase:
+    description: "GPG passphrase"
+    required: true
+  git_branch:
+    description: "Extra repository to build package"
+    required: false
+  extra_command:
+    description: "Extra command to run before building"
+    required: false
+  extra_package:
+    description: "Extra package to build"
+    required: false
+    default: "false"
+  tmate:
+    description: "Run tmate for debugging"
+    required: false
+  repo_mirror:
+    description: "Mirror to use in build"
+    default: repo
+    required: false
+  repo_dev:
+    description: "Development repository"
+    required: false
+  pacman_mirror:
+    description: "Optional: Specific mirror to override automatic selection"
+    required: false
+    #default: 'https://nnenix.mm.fcix.net/manjaro/stable/$repo/$arch'
+    default: "https://mirrors.ocf.berkeley.edu/manjaro/stable/$repo/$arch"
+  publish_github:
+    description: "Publish package on GitHub"
+    required: false
+    default: "true"
+  push_to_repo:
+    description: "Push package to repository"
+    required: false
+    default: "true"
+  update_db:
+    description: "Update repository database"
+    required: false
+    default: "true"
+  repo_host:
+    description: "Repository host"
+    required: false
+  repo_user:
+    description: "Repository user"
+    required: false
+  repo_port:
+    description: "Repository port"
+    required: false
+  repo_dir:
+    description: "Repository directory"
+    required: false
+  github_token:
+    description: "GitHub token for authentication"
+    required: true
+  telegram_token:
+    description: "Telegram bot token for notifications"
+    required: false
+  telegram_chat_id:
+    description: "Telegram chat ID for notifications"
+    required: false
+  branch_type:
+    description: "Branch type (testing or stable)"
+    required: true
+  url:
+    description: "URL do repositório"
+    required: false
+  new_branch:
+    description: "Nome do novo branch"
+    required: false
+  package_name:
+    description: "Nome do pacote"
+    required: false
+  aur_package_dir:
+    description: "Directory containing the AUR package"
+    required: false
+    default: "."
+  start_time:
+    description: "Hora de início do workflow"
+    required: false
+  start_timestamp:
+    description: "Timestamp de início do workflow"
+    required: false
+
+# Definição dos passos da ação
+runs:
+  using: "composite"
+  steps:
+    - name: Definir a função send_telegram_message no script temporário
+      shell: bash
+      env:
+        TELEGRAM_TOKEN: "${{ inputs.telegram_token }}"
+        TELEGRAM_CHAT_ID: "${{ inputs.telegram_chat_id }}"
+      run: |
+        #Definir a função send_telegram_message no script temporário
+        cat << 'EOF' > /tmp/send_telegram_message.sh
+        export TERM=${TERM:-xterm}
+        export TERM=${TERM:-xterm-256color}
+
+        #Definindo variáveis de cores
+        export red="\033[01;31m"
+        export green="\033[01;32m"
+        export yellow="\033[01;33m"
+        export blue="\033[01;34m"
+        export pink="\033[01;35m"
+        export cyan="\033[01;36m"
+        export reset="\033[0m"
+        alias ls='ls -lha --color=auto'
+        alias dir='ls -lha --color=auto'
+
+        die() {
+          local msg="$1"
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove as tags HTML
+          echo -e "BP=>${cyan}error: ${red}${msg}${reset}"
+          exit  1
+        }
+        export -f die
+
+        msg_raw() {
+          local msg="$1"
+          # Remove tags HTML, se existirem
+          #msg="$(sed 's/<[^>]*>//g' <<< "$msg")"
+
+          # Verifica se existe ':' na mensagem
+          if [[ "$msg" == *:* ]]; then
+            # Divide a string antes e depois do primeiro ':'
+            local before_colon="${msg%%:*}:"
+            local after_colon="${msg#*: }"
+            # Aplica as cores
+            msg="${cyan}${before_colon} ${red}${after_colon}${reset}"
+          else
+            # Se não houver ':', aplica apenas a cor padrão
+            msg="${cyan}${msg}${reset}"
+          fi
+          echo -e "$msg"
+        }
+        export -f msg_raw
+
+        msg() {
+          local msg="$1"
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove as tags HTML
+          echo -e "BP=>${cyan}running: ${yellow}${msg}${reset}"
+        }
+        export -f msg
+
+        msg_ok() {
+          local msg="$1"
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove as tags HTML
+          echo -e "BP=>${cyan}feito: ${green}${msg}${reset}"
+        }
+        export -f msg_ok
+
+        msg_run() {
+          local msg="$1"
+          echo -e "BP=>${cyan}running: ${yellow}${msg}${reset}"
+          eval "$msg"
+        }
+        export -f msg_run
+
+        msg_info() {
+          local msg="$1"
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove as tags HTML
+          echo -e "BP=>${yellow}info   : ${cyan}${msg}${reset}"
+        }
+        export -f msg_info
+
+        msg_warning() {
+          local msg="$1"
+          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove as tags HTML
+          echo -e "BP=>${red}warning: ${orange}${msg}${reset}"
+        }
+        export -f msg_warning
+
+        replicate() {
+          local char=${1:-'#'}
+          local nsize=${2:-$(tput cols)}
+          local line
+          #printf -v line "%*s" "$nsize" && echo "${line// /$char}"
+          #printf -v line "%*s" "$nsize" && echo -e "\033[31m${line// /$char}\033[0m"
+          printf -v line "%*s" "$nsize" && echo -e "${blue}${line// /$char}${reset}"
+        }
+        export -f replicate
+
+        send_telegram_message() {
+          local message="$1"
+          local parse_mode="$2"
+
+          # Define parse_mode como "MarkdownV2" se não for especificado
+          [[ -z $parse_mode ]] && parse_mode="HTML"
+
+          # Remove as tags HTML e exibe o resultado no terminal
+          echo -e "${red}$(sed 's/<[^>]*>//g' <<< "$message")${reset}"
+          # Envia a mensagem original com HTML para o Telegram
+          curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
+            -d chat_id="${{ inputs.telegram_chat_id }}" \
+            -d text="$message" \
+            -d parse_mode="$parse_mode"
+        }
+        export -f send_telegram_message
+        EOF
+
+    - name: Initializing package creation
+      shell: bash
+      run: |
+        #Initializing package creation
+        source /tmp/send_telegram_message.sh
+
+        pkgname="${{ inputs.package_name }}"
+        branch="${{ inputs.branch_type }}"
+        repositorio="${{ inputs.repo_dir }}"
+        repo_origem="${{ inputs.url }}"
+        #https://docs.github.com/pt/enterprise-server@3.10/actions/writing-workflows/choosing-what-your-workflow-does/accessing-contextual-information-about-workflow-runs
+        started_by_user="${{ github.actor }}"
+        triggered_by_user="${{ github.triggering_actor }}"
+        pkgname_escaped=$(echo "$pkgname" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+        branch_escaped=$(echo "${branch^^}" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+
+        message="⭐️ <b>build-package - Iniciando criação de pacote</b>
+        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+        <b>Nome:</b> <code>$pkgname_escaped</code>
+        <b>Origem:</b> <code>${repo_origem}</code>
+        <b>Repositório:</b> <code>$branch_escaped</code>"
+        #send_telegram_message "$message"
+
+    - name: Debug Inputs
+      shell: bash
+      run: |
+        # Debug Inputs
+        echo -e "${bold}DEBUG:${std} All inputs"
+        echo -e "${blue}${{ toJson(inputs) }}${std}"
+        echo -e "${bold}DEBUG:${std} build_env from input: ${{ inputs.build_env }}"
+        echo -e "${bold}DEBUG:${std} build_env from env: $DEBUG_BUILD_ENV"
+        echo -e "${bold}DEBUG:${std} tmate input: ${{ inputs.tmate }}"
+        echo -e "${bold}DEBUG:${std} All env variables"
+        env | sort
+
+    - name: Setup build environment
+      shell: bash
+      run: |
+        # Configuração do ambiente de build
+        # Atualiza o sistema e instala as dependências necessárias
+        sudo pacman -Syu --ignore=community-livecd-key,biglinux-livecd-key --quiet --needed --noconfirm
+
+        # Verifica as versões instaladas
+        meson --version
+        ninja --version
+
+    - name: Configure System and Repositories
+      shell: bash
+      run: |
+        #Configure System and Repositories
+        echo "Build environment: ${{ inputs.build_env }}"
+        echo "Build environment from env: $DEBUG_BUILD_ENV"
+        echo "All inputs:"
+        echo "${{ toJson(inputs) }}"
+        echo "DEBUG: BRANCH_TYPE: $BRANCH_TYPE"
+
+        # Set up pacman mirror
+        echo "Usando mirror especificado: ${{ inputs.pacman_mirror }}"
+        echo 'Server = ${{ inputs.pacman_mirror }}' | sudo tee /etc/pacman.d/mirrorlist
+
+        # Remove existing BigLinux repositories
+        sudo sed -i '/biglinux/,$d' /etc/pacman.conf
+
+        # Add appropriate repositories based on build environment
+        if [ "${{ inputs.build_env }}" == "testing" ] || [ "$BRANCH_TYPE" == "testing" ]; then
+          echo '
+          [community-testing]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/testing/$arch
+
+          [community-stable]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/stable/$arch
+
+          [community-extra]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/extra/$arch
+
+          [biglinux-testing]
+          SigLevel = PackageRequired
+          Server = https://repo.biglinux.com.br/testing/$arch
+
+          [biglinux-stable]
+          SigLevel = PackageRequired
+          Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+        elif [ "${{ inputs.build_env }}" == "extra" ] || [ "$BRANCH_TYPE" == "extra" ]; then
+          echo '
+          [community-extra]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/extra/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+        elif [ "${{ inputs.build_env }}" == "stable" ] || [ "$BRANCH_TYPE" == "stable" ]; then
+          echo '
+          [community-stable]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/stable/$arch
+
+          [community-extra]
+          SigLevel = PackageRequired
+          Server = https://repo.communitybig.org/extra/$arch
+
+          [biglinux-stable]
+          SigLevel = PackageRequired
+          Server = https://repo.biglinux.com.br/stable/$arch' | sudo tee -a /etc/pacman.conf /etc/chrootbuild/pacman.conf.x86_64
+        elif [ "${{ inputs.build_env }}" == "aur" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
+          echo "Configurando para pacote AUR: ${{ inputs.package_name }}"
+          # Configurações específicas para AUR
+          sudo sed -i 's/^#MAKEFLAGS="-j2"/MAKEFLAGS="-j$(nproc)"/' /etc/makepkg.conf
+          sudo sed -i 's/^#BUILDDIR/BUILDDIR/' /etc/makepkg.conf
+          sudo sed -i 's/^#PKGDEST/PKGDEST/' /etc/makepkg.conf
+
+          # Habilitar o repositório multilib (necessário para alguns pacotes AUR)
+          sudo sed -i '/\[multilib\]/,/Include/s/^#//' /etc/pacman.conf
+
+          # Atualizar os repositórios após as mudanças
+          sudo pacman -Sy
+
+          # Instalar dependências comumente necessárias para builds AUR
+          sudo pacman -S --needed base-devel git --noconfirm
+        else
+          echo "Invalid branch type specified: ${{ inputs.branch_type }}"
+          exit 1
+        fi
+
+        # Configure makepkg
+        sudo sed -i '/PACKAGER=/s/.*/PACKAGER="Big Community Package Build <talesam@gmail.com>"/' /etc/makepkg.conf
+        sudo sed -i '/MAKEFLAGS=/s/.*/MAKEFLAGS="-j'$(nproc)'"/' /etc/makepkg.conf
+
+        # Modify manjaro-chrootbuild
+        sudo sed -i 's|https://repo.manjaro.org/repo|https://nnenix.mm.fcix.net/manjaro|' /usr/lib/manjaro-chrootbuild/util.sh
+        sudo sed -i '/-Syy/s/-Syy/-Syy git /' /usr/lib/manjaro-chrootbuild/util-chroot.sh
+
+    - name: Download Source
+      shell: bash
+      run: |
+        # Download the source code
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          echo "Cloning AUR package from ${{ inputs.url }}"
+          git clone ${{ inputs.url }} aur_package
+          if [ -d "aur_package" ]; then
+            cd aur_package
+            if [ ! -f "PKGBUILD" ]; then
+              echo "Error: PKGBUILD not found in the AUR package"
+              exit 1
+            fi
+          else
+            echo "Error: Failed to clone AUR package"
+            exit 1
+          fi
+        elif [ -n "${{ inputs.url }}" ]; then
+          echo "Cloning repository from ${{ inputs.url }}"
+          git clone ${{ inputs.url }}.git source_repo
+          cd source_repo
+          if [ -n "${{ inputs.git_branch }}" ]; then
+            echo "Checking out branch ${{ inputs.git_branch }}"
+            git checkout ${{ inputs.git_branch }}
+          fi
+        else
+          echo "No URL provided, assuming we're already in the correct repository"
+        fi
+
+        # Debug: Show current directory and contents
+        echo "Current directory: $(pwd)"
+        echo "Directory contents:"
+        ls -la
+
+    ### Setup tmate session for debugging if enabled
+    - name: Setup TMATE Session
+      uses: mxschmitt/action-tmate@v3
+      if: inputs.tmate == 'true'
+      with:
+        install-dependencies: false
+
+    # Constrói o pacote
+    - name: Build package
+      shell: bash
+      run: |
+        #Build package
+        source /tmp/send_telegram_message.sh
+        set -ex  # Isso fará o script falhar se qualquer comando falhar
+        # Debug: Mostrar ambiente de build
+        msg_raw "Build environment: ${{ inputs.build_env }}"
+        msg_raw "Package name: ${{ inputs.package_name }}"
+
+        # Se entramos em um diretório no passo anterior, vamos garantir que estamos nele
+        if [ -d "source_repo" ]; then
+          cd source_repo
+        fi
+
+        # Debug: Mostrar diretório atual e conteúdo
+        msg_raw "Current directory: $(pwd)"
+        msg_raw "Directory contents:"
+        msg_run "ls -la $PWD"
+
+        # Create and set permissions for $PKGDEST and $SRCDEST
+        sudo mkdir -p /home/packages /home/sources
+        sudo chown builduser:builduser /home/packages /home/sources
+
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          # For packages AUR
+          cd ${{ inputs.aur_package_dir }}
+          msg_raw "Construindo pacote AUR: ${{ inputs.package_name }}"
+          msg_raw "Current AUR package directory: $(pwd)"
+          msg_raw "AUR package directory contents:"
+          msg_run "ls -la $PWD"
+
+          # Give permissions to builduser for the current directory
+          sudo chown -R builduser:builduser .
+
+          # Create temporary directory for makepkg
+          sudo mkdir -p /tmp/makepkg
+          sudo chown builduser:builduser /tmp/makepkg
+
+          # Verificar ambiente de compilação
+          echo "Verificando ambiente de compilação..."
+          gcc --version
+          meson --version
+          ninja --version
+          pkg-config --version
+
+          # Detect and import GPG keys if present in PKGBUILD
+          if [ -f "PKGBUILD" ]; then
+            echo "Checking for required PGP keys..."
+            if grep -q "validpgpkeys" PKGBUILD; then
+              # Extract GPG key from PKGBUILD
+              key=$(grep "validpgpkeys" PKGBUILD | sed 's/.*(\"\(.*\)\")/\1/')
+
+              if [ ! -z "$key" ]; then
+                echo "Importing GPG key: $key"
+                # Try multiple keyservers to ensure key import succeeds
+                gpg --keyserver keyserver.ubuntu.com --recv-keys "$key" || \
+                gpg --keyserver keys.gnupg.net --recv-keys "$key" || \
+                gpg --keyserver hkp://pgp.mit.edu --recv-keys "$key" || \
+                echo "Warning: Failed to import key $key"
+              fi
+            else
+              echo "No PGP keys defined in PKGBUILD"
+            fi
+          fi
+
+          # Extract dependencies from PKGBUILD
+          source PKGBUILD
+          TAG_NAME="$pkgver-$pkgrel"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          msg_info "TAG_NAME   : ${TAG_NAME}"
+          msg_info "depends    : ${depends[@]}"
+          msg_info "makedepends: ${makedepends[@]}"
+
+          # Install all dependencies using yay
+          install_dependencies() {
+              if [ -n "$depends" ] || [ -n "$makedepends" ]; then
+                  echo "Installing all dependencies..."
+                  yay -Sy --asdeps --needed --noanswerdiff --noconfirm "${depends[@]}" "${makedepends[@]}" || {
+                      echo "Error installing dependencies"
+                      return 1
+                  }
+              fi
+              return 0
+          }
+
+          # Call the installation function
+          if ! install_dependencies; then
+              echo "Failed to install dependencies"
+              exit 1
+          fi
+
+          # Build the package without installing
+          echo "Building AUR package: ${{ inputs.package_name }}"
+          makepkg -s --noconfirm --noprogressbar --nodeps
+        else
+          # Para pacotes não-AUR
+          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          cd $gitfolder
+          source PKGBUILD
+          TAG_NAME="$pkgver-$pkgrel"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          msg_info "TAG_NAME   : ${TAG_NAME}"
+          msg_info "depends    : ${depends[@]}"
+          msg_info "makedepends: ${makedepends[@]}"
+
+          # Ensure architecture is set to x86_64
+          sed -i "/^arch=/c\arch=('x86_64')" PKGBUILD
+
+          # Build for x86_64
+          echo -e "\033[01;31mBuild x86_64\033[0m"
+          # Determinar o branch de build
+          if [ "${{ inputs.build_env }}" == "extra" ]; then
+            build_branch="testing"
+            echo "Ambiente de build é 'extra', usando branch 'testing' para chrootbuild"
+          else
+            #build_branch="${{ inputs.branch_type }}"
+            build_branch="stable"
+          fi
+
+          # Executar chrootbuild com o branch determinado
+          sudo chrootbuild -H -p . -b ${build_branch}
+        fi
+
+        # Executa comando extra, se fornecido
+        if [ -n "${{ inputs.extra_command }}" ]; then
+          echo "Executando comando extra: ${{ inputs.extra_command }}"
+          ${{ inputs.extra_command }}
+        fi
+
+        # Move the compiled package to /home/packages
+        #cd $gitfolder
+        mv *.pkg.tar.zst /home/packages/ 2>/dev/null || echo 'No package found to move'
+
+        echo "Build completed. Checking /home/packages:"
+        msg_run "ls -lah /home/packages"
+
+    # Assina o pacote
+    - name: Sign Package
+      shell: bash
+      run: |
+        #Sign Package
+        source /tmp/send_telegram_message.sh
+        cd /home/packages
+        msg_run "ls -lah $PWD"
+
+        # Importa a chave GPG
+        echo "${{ inputs.gpg_key }}" | gpg --batch --import &>/dev/null
+        # Assina todos os pacotes encontrados
+        for p in $(find $PWD -maxdepth 1 -regex '.*\.pkg\.tar\.\(xz\|zst\)'); do
+          if [ -f "$p" ]; then
+            echo "Assinando pacote: $p"
+            gpg --pinentry-mode loopback --passphrase "${{ inputs.gpg_passphrase }}" --detach-sign "${p}"
+          fi
+        done
+
+        # Lista os arquivos .sig gerados
+        echo "Arquivos de assinatura gerados:"
+        ls -l *.sig || echo "Nenhum arquivo .sig encontrado"
+
+    # Gera checksums para os pacotes
+    - name: Generate checksums
+      shell: bash
+      run: |
+        #Generate checksums
+        source /tmp/send_telegram_message.sh
+        cd /home/packages
+        msg_run "ls -lah $PWD"
+        # Gera checksums para pacotes e assinaturas
+        for i in *.pkg.tar.zst; do
+          if [ -f "$i" ]; then
+            md5sum "$i" >> "$i.md5"
+            echo "Gerado MD5 para $i"
+          fi
+        done
+
+        for i in *.sig; do
+          if [ -f "$i" ]; then
+            md5sum "$i" >> "${i%.sig}.md5"
+            echo "Gerado MD5 para $i"
+          fi
+        done
+
+        # Lista os arquivos MD5 gerados
+        echo "Arquivos MD5 gerados:"
+        ls -l *.md5 || echo "Nenhum arquivo MD5 encontrado"
+
+    # Publish the package on GitHub
+    - name: Publish Package on GitHub
+      if: inputs.publish_github == 'true' && inputs.build_env != 'aur'
+      shell: bash
+      run: |
+        #Publish Package on GitHub
+        source /tmp/send_telegram_message.sh
+        gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+        #cd $gitfolder
+        cd /home/packages
+        msg_run "ls -lah $PWD"
+
+        # Skip linux-zen packages
+        if [ -n "$(grep linux-zen <<< $gitfolder)" ];then
+          exit 0
+        fi
+
+        # # Determine the last committer
+        # lastCommit=$(git log -1 --format="%an <%ae>")
+        # if [ "$(grep github-actions <<< $lastCommit)" ];then
+        #   lastCommit=$(git log -2 --format="%an <%ae>")
+        # fi
+
+        # Set up GitHub authentication and determine the repository
+        if [ -n "${{ inputs.url }}" ]; then
+          echo "${{ inputs.github_token }}" | gh auth login --with-token
+          repo=$(echo "${{ inputs.url }}" | sed 's|https://github.com/||')
+        else
+          echo "${{ inputs.github_token }}" | gh auth login --with-token
+          repo="${{ inputs.repo }}"
+        fi
+
+        # Fallback to github.repository if repo is still empty
+        if [ -z "$repo" ]; then
+          repo="${{ github.repository }}"
+        fi
+
+        # Create and upload the release
+        ls *.pkg* | head -n1 | sed 's/.pkg.*//' > release
+        release=$(cat release)
+
+        echo "release=$release"
+        echo "repo=$repo"
+        echo "url=${{ inputs.url }}"
+
+        if [ -n "$repo" ] && [ -n "$release" ]; then
+          echo "Using repository: $repo"
+          echo "Creating release: $release"
+          gh release create ${release} --title ${release} --repo ${repo} --notes "automated release from ${{ inputs.url }}" || echo "release already exists"
+          for i in .zst .sig .tar .md5; do
+            find -iname "*$i" -exec gh release upload ${release} --repo ${repo} --clobber {} \;
+          done
+        else
+          echo "Error: repo or release is empty"
+          exit 1
+        fi
+
+    # Push the package to the repository
+    - name: Push to Repo
+      if: inputs.push_to_repo == 'true'
+      shell: bash
+      env:
+        LANG: en_US.UTF-8
+        LC_ALL: en_US.UTF-8
+      run: |
+        #Push to Repo
+        source /tmp/send_telegram_message.sh
+        # Setup SSH
+        mkdir -p /home/builduser/.ssh
+        ssh-keyscan -t rsa -p ${{ inputs.repo_port }} ${{ inputs.repo_host }} >> /home/builduser/.ssh/known_hosts
+        ip=${{ inputs.repo_host }}
+
+        if [ "${{ inputs.build_env }}" == "aur" ]; then
+          # Para pacotes AUR
+          cd /home/packages
+          branch="EXTRA"  # Todos os pacotes AUR vão para EXTRA
+        else
+          # Para pacotes não-AUR
+          gitfolder=$(find -type f -name PKGBUILD | sed 's/PKGBUILD//')
+          cd $gitfolder
+          cd /home/packages
+
+          # Determine the last committer (apenas para pacotes não-AUR)
+          # lastCommit=$(git log -1 --format="%an <%ae>")
+          # if [ "$(grep github-actions <<< $lastCommit)" ];then
+          #   lastCommit=$(git log -2 --format="%an <%ae>")
+          # fi
+
+          # Set the branch based on BRANCH_TYPE
+          if [ "${{ inputs.branch_type }}" == "stable" ]; then
+            branch="STABLE"
+          elif [ "${{ inputs.branch_type }}" == "extra" ]; then
+            branch="EXTRA"
+          else
+            branch="TESTING"
+          fi
+        fi
+        msg_run "ls -lah $PWD"
+
+        # Upload the package files
+        for i in *.pkg.tar.zst; do
+          pkgname=$(basename "$i")
+          pkgname_escaped=$(echo "$pkgname" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+          branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+          echo "PKGNAME_BASENAME=$pkgname_escaped"  >> $GITHUB_ENV
+          echo "PKGNAME_BRANCH=${branch_escaped,,}" >> $GITHUB_ENV
+          repo_path="${{ inputs.repo_dir }}"
+          repositorio="${{ inputs.repo_dir }}"
+          file_size_bytes=$(stat -c%s "$i")
+          file_size_kb=$((file_size_bytes / 1024))
+
+          message="✅ <b>build-package - 2/3 - ENVIANDO 📦 PARA O REPOSITÓRIO</b>
+          <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+          <b>Pacote:</b> <code>${pkgname_escaped}</code>
+          <b>Tamanho bytes/kb:</b> <code>${file_size_bytes}/${file_size_kb}k</code>
+          <b>Repositório:</b> <code>${branch_escaped}</code>"
+          send_telegram_message "$message"
+
+          if rsync --itemize-changes -apz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/; then
+            #message="✅ <b>build-package - Pacote enviado com sucesso para o repositório</b>"
+            #send_telegram_message "$message"
+            :
+          else
+            message="❌ <b>build-package - Falha ao enviar o pacote para o repositorio</b>"
+            send_telegram_message "$message"
+          fi
+        done
+
+        for i in *.sig *.md5; do
+          rsync -vapz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/
+        done
+
+    # Runs only if previous steps were successful
+    - name: Update Repository Database
+      if: inputs.update_db == 'true' && success()
+      shell: bash
+      run: |
+        #Update Repository Database
+        source /tmp/send_telegram_message.sh
+        # Determine the database name based on the branch type
+        if [ "${{ inputs.branch_type }}" == "stable" ]; then
+          branch="STABLE"
+          db_name="community-stable"
+        elif [ "${{ inputs.branch_type }}" == "extra" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
+          branch="EXTRA"
+          db_name="community-extra"
+        elif [ "${{ inputs.branch_type }}" == "testing" ]; then
+          branch="TESTING"
+          db_name="community-testing"
+        else
+          echo "${red}Error: Unknown branch type: ${{ inputs.branch_type }} ${reset}"
+          exit 1
+        fi
+
+        echo "Branch: $branch"
+        echo "Database name: $db_name"
+        branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+        db_name_escaped=$(echo "$db_name" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+
+        #message="🔄 <b>build-package - Iniciando sincronização do banco de dados no repositório</b>"
+        #send_telegram_message "$message"
+
+        ssh -v ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
+          set -x
+          cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
+          repo-add -n -R $db_name.db.tar.gz *.pkg.tar.zst
+          exit_code=\$?
+          echo -e "${red}Comando repo-add concluído com código de saída: \$exit_code ${reset}"
+          exit \$exit_code
+        EOF
+
+        if [ $? -eq 0 ]; then
+          #message="✅ <b>build-package - Sincronização do banco de dados no repositório concluida com sucesso</b>"
+          #send_telegram_message "$message"
+          :
+        else
+          message="❌ <b>build-package - Falha na sincronização do banco de dados no repositório</b>"
+          send_telegram_message "$message"
+        fi
+
+    # Keeps only the most recent package
+    - name: Clean Old Packages
+      if: inputs.update_db == 'true' && success()
+      shell: bash
+      run: |
+        #Clean Old Packages
+        source /tmp/send_telegram_message.sh
+
+        # Determine the branch based on the branch type
+        if [ "${{ inputs.branch_type }}" == "stable" ]; then
+          branch="STABLE"
+          db_name="community-stable"
+        elif [ "${{ inputs.branch_type }}" == "extra" ] || [ "${{ inputs.branch_type }}" == "aur" ]; then
+          branch="EXTRA"
+          db_name="community-extra"
+        elif [ "${{ inputs.branch_type }}" == "testing" ]; then
+          branch="TESTING"
+          db_name="community-testing"
+        else
+          message="❌ <b>Error: Unknown branch type</b>
+          <code>${{ inputs.branch_type }}"
+          send_telegram_message "$message"
+          exit 1
+        fi
+
+        echo "Branch: $branch"
+        echo "Database name: $db_name"
+        branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+
+        #message="🧹 <b>build-package - Iniciando limpeza de pacotes antigos no repositório</b>"
+        #send_telegram_message "$message"
+
+        ssh ${{ inputs.repo_user }}@${{ inputs.repo_host }} -p ${{ inputs.repo_port }} << EOF
+          set -x
+          cd ${{ inputs.repo_dir }}/${branch,,}/x86_64
+
+          # Manter apenas a versão mais recente de cada pacote
+          for pkg in $(ls *.pkg.tar.zst | cut -d- -f1 | sort -u); do
+            newest=\$(ls \${pkg}-*.pkg.tar.zst | sort -V | tail -n1)
+            for old in \${pkg}-*.pkg.tar.zst; do
+              if [ "\$old" != "\$newest" ]; then
+                echo "${red}Removing old package: \$old ${reset}"
+                rm -f "\$old" "\${old}.sig" "\${old}.md5"
+              fi
+            done
+          done
+
+          # Remover os bancos de dados existentes
+          rm -f ${db_name}.db.tar.gz ${db_name}.files.tar.gz
+
+          # Recriar o banco de dados com os pacotes presentes
+          repo-add ${db_name}.db.tar.gz *.pkg.tar.zst
+
+          # Remover arquivos .sig e .md5 órfãos
+          for file in *.sig *.md5; do
+            base_name=\${file%.*}
+            if [ ! -f "\${base_name}" ]; then
+              echo "Removing orphaned file: \$file"
+              rm -f "\$file"
+            fi
+          done
+          exit_code=\$?
+          echo "${cyan}Limpeza concluída com código de saída: ${yellow}\$exit_code ${reset}"
+          exit \$exit_code
+        EOF
+
+        if [ $? -eq 0 ]; then
+          #message="✅ <b>build-package - Limpeza de pacotes antigos no repositório</b>"
+          #send_telegram_message "$message"
+          :
+        else
+          message="❌ <b>Falha na limpeza de pacotes antigos no repositório</b>"
+          send_telegram_message "$message"
+        fi
+
+    - name: Extrair data do nome do arquivo .zst e definir tag_name
+      if: ${{ inputs.teste_input != true }}
+      id: set-tag-name
+      shell: bash
+      run: |
+        source /tmp/send_telegram_message.sh
+        replicate '#'
+        FILENAME="${{env.PKGNAME_BASENAME}}"
+        
+        # Remove a extensão .pkg.tar.zst do nome do arquivo
+        RELEASE_NAME=$(echo "$FILENAME" | sed 's/\.pkg\.tar\.zst$//')
+        
+        # Define o TAG_NAME baseado no RELEASE_NAME
+        TAG_NAME="$RELEASE_NAME"
+        
+        echo "PKG_TAG_NAME=$TAG_NAME"                            >> $GITHUB_ENV
+        echo "RELEASE_NAME=$RELEASE_NAME"                        >> $GITHUB_ENV
+        echo "pkg_path=/home/packages/${{env.PKGNAME_BASENAME}}" >> $GITHUB_OUTPUT
+        echo "PKG_PATH=/home/packages/${{env.PKGNAME_BASENAME}}" >> $GITHUB_ENV
+
+        msg_raw "FILENAME    : ${{env.PKGNAME_BASENAME}}"
+        msg_raw "TAG_NAME    : $TAG_NAME"
+        msg_raw "RELEASE_NAME: $RELEASE_NAME"
+        msg_raw "pkg_path    : /home/packages/${{env.PKGNAME_BASENAME}}"
+        msg_raw "PKG_PATH    : /home/packages/${{env.PKGNAME_BASENAME}}"
+        replicate '#'
+
+    - name: Prepare Package for release (7z)
+      id: prepare-package
+      shell: bash
+      run: |
+        #Prepare Package for release (7z)
+        source /tmp/send_telegram_message.sh
+        replicate '#'
+        pushd /home/packages || true
+        # Prepara a mensagem
+        message="⏳ <b>[step 3/4] build-package - Prepare Package for release (7z)</b>
+        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+        <b>Workflow:</b> <code>build-package/action.yml</code>
+        <b>Pacote:</b> <code>${{ env.PKGNAME_BRANCH }}/${{ env.PKGNAME_BASENAME }}</code>
+        <b>Inicio:</b> <code>${START_TIME}</code>"
+        send_telegram_message "$message"
+        msg_info "$message"
+        replicate '-'
+        msg_run "ls -lah $PWD"
+        release=$(basename "${{env.PKG_PATH}}" .pkg.tar.zst)
+        release_name="${release}"
+
+        # Obtém o tamanho do arquivo em bytes
+        file_size=$(stat -c%s "${{env.PKG_PATH}}")
+
+        # Verifica se o tamanho é maior que 2000 MB (2000 * 1024 * 1024 bytes)
+        if (( file_size > 2000 * 1024 * 1024 )); then
+          msg_info "O arquivo é maior que 2000 MB. Compactando e dividindo..."
+          7z a -v2000m "${release}.7z" "${{env.PKG_PATH}}" # Compacta e divide em partes de 2000 MB
+          upload_path="${release}.7z*"
+        else
+          msg_info "O arquivo não é maior que 2000 MB. Não será compactado."
+          upload_path="${{env.PKG_PATH}}"
+        fi
+
+        echo "release=${release}"         >> "$GITHUB_OUTPUT"
+        echo "release_name=${release}"    >> "$GITHUB_OUTPUT"
+        echo "upload_path=${upload_path}" >> "$GITHUB_OUTPUT"
+
+        msg_info "Package ${release} prepared for release"
+        replicate '-'
+        msg_run "ls -lah $PWD"
+        replicate '-'
+        # Debug
+        msg_info "full_pkgname (original): ${{env.PKG_PATH}}"
+        msg_info "Upload Path            : ${upload_path}"
+        msg_info "full_pkgname (sig)     : ${{env.PKG_PATH}}.sig"
+        msg_info "full_pkgname (md5)     : ${{env.PKG_PATH}}.md5"
+        msg_info "release                : ${release}"
+        msg_info "release_name           : ${release_name}"
+        popd || true
+        replicate '='
+
+    - name: Verificar se o package foi gerado corretamente
+      if: ${{ inputs.teste_input != true }}
+      shell: bash
+      run: |
+        # Verificar se o arquivo package foi gerado corretamente
+        source /tmp/send_telegram_message.sh
+        replicate '='
+        pushd /home/packages || true
+        msg_run 'ls -lah --color=auto $PWD'
+        popd || true
+        replicate '='
+
+    - name: Create Release
+      if: ${{ inputs.teste_input != true }}
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      with:
+        files: |
+          ${{ env.PKG_PATH }}
+          ${{ env.PKG_PATH }}.sig
+          ${{ env.PKG_PATH }}.md5
+          ${{ steps.prepare-package.outputs.upload_path }}
+        tag_name: ${{ env.RELEASE_NAME }}
+        name: ${{ env.RELEASE_NAME }}
+        generate_release_notes: true
+        body: |
+          - **Data e Hora        :** ${{ env.START_TIME }}
+          - **Arquivo PKG        :** ${{ env.PKGNAME_BASENAME }}
+          - **Arquivo SIG        :** ${{ env.PKGNAME_BASENAME }}.sig
+          - **Arquivo MD5        :** ${{ env.PKGNAME_BASENAME }}.md5
+          - **Nome do Repositório:** ${{ env.REPO_NAME }}
+        draft: false
+        prerelease: false
+        fail_on_unmatched_files: false
+
+    # Send a Telegram alert if the build fails
+    - name: Telegram Alert Fail
+      if: failure()
+      shell: bash
+      run: |
+        # Function to send Telegram message
+        source /tmp/send_telegram_message.sh
+        link_action=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+        message="🚨 <b>FALHA ao criar pacote:</b>
+        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+        <b>Pacote:</b> <code>${{ github.event.action }}</code>
+        <b>Branch:</b> <code>${{ github.ref_name }}</code>
+        <b>URL erro:</b> <a href='https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}'>${link_action}</a>"
+        send_telegram_message "$message"
+
+    - name: Capturar hora de término e calcular duração
+      shell: bash
+      run: |
+        # Function to send Telegram message
+        source /tmp/send_telegram_message.sh
+
+        START_TIME="${{ inputs.start_time }}"
+        START_TIMESTAMP="${{ inputs.start_timestamp }}"
+        END_TIME=$(date +"%Y-%m-%d %H:%M:%S")  # Hora completa
+        END_TIMESTAMP=$(date +%s)
+        duration=$((END_TIMESTAMP - START_TIMESTAMP))
+
+        hours=$((duration / 3600))
+        minutes=$(( (duration % 3600) / 60 ))
+        seconds=$((duration % 60))
+
+        message="🏆 <b>build-package - 3/3 - JOB FINALIZADO EM ⏳:</b> <code>${hours}h ${minutes}m ${seconds}s</code>
+        <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+        <b>Inicio:</b> <code>${START_TIME}</code>
+        <b>Fim   :</b> <code>${END_TIME}</code>"
+        send_telegram_message "$message"
