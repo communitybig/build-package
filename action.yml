@@ -409,11 +409,11 @@ runs:
 
           if [[ -d "aur_package" ]]; then
             cd aur_package
-
+            
             # Extrair nome do pacote da URL do AUR
             REPO_ORIGEM_NAME=$(basename "${{ inputs.url }}" .git)
             REPO_ORIGEM_OWNER="aur"
-
+            
             # Exportar para o ambiente do GitHub Actions
             echo "REPO_ORIGEM_NAME=$REPO_ORIGEM_NAME" >> $GITHUB_ENV
             echo "REPO_ORIGEM_OWNER=$REPO_ORIGEM_OWNER" >> $GITHUB_ENV
@@ -484,22 +484,23 @@ runs:
           pkg-config --version
 
           # Detect and import GPG keys if present in PKGBUILD
-          if [[ -f "PKGBUILD" ]]; then
+          if [ -f "PKGBUILD" ]; then
             msg_info "Checking for required PGP keys..."
-            source PKGBUILD
-            for key in "${validpgpkeys[@]}"; {
-              if [[ ! -z "$key" ]]; then
+            if grep -q "validpgpkeys" PKGBUILD; then
+              # Extract GPG key from PKGBUILD
+              key=$(grep "validpgpkeys" PKGBUILD | sed 's/.*(\"\(.*\)\")/\1/')
+
+              if [ ! -z "$key" ]; then
                 msg_raw "Importing GPG key: $key"
-                # Tenta importar a chave de diferentes servidores de chaves
-                if gpg --keyserver keyserver.ubuntu.com --recv-keys "$key" || \
-                   gpg --keyserver keys.gnupg.net       --recv-keys "$key" || \
-                   gpg --keyserver hkp://pgp.mit.edu    --recv-keys "$key"; then
-                  msg_ok "Successfully imported key: $key"
-                else
-                  msg_warning "Failed to import key: $key"
-                fi
+                # Try multiple keyservers to ensure key import succeeds
+                gpg --keyserver keyserver.ubuntu.com --recv-keys "$key" || \
+                gpg --keyserver keys.gnupg.net --recv-keys "$key" || \
+                gpg --keyserver hkp://pgp.mit.edu --recv-keys "$key" || \
+                msg_warning "Warning: Failed to import key $key"
               fi
-            }
+            else
+              msg_info "No PGP keys defined in PKGBUILD"
+            fi
           fi
 
           # Extract dependencies from PKGBUILD
@@ -648,67 +649,99 @@ runs:
         ip="${{ inputs.repo_host }}"
 
         if [[ "${{ inputs.build_env }}" == "aur" ]]; then
-          msg_run 'cd /home/packages'
-          branch="EXTRA"  # Todos os pacotes AUR vão para EXTRA
-        else
-          msg_run 'cd /home/packages'
-          msg_info '# Set the branch based on BRANCH_TYPE'
-          case "${{ inputs.branch_type }}" in
-            "stable")
-            branch="STABLE"
-              ;;
-            "extra")
+            msg_info "=== Iniciando processamento de pacote AUR ==="
+            msg_raw "Diretório atual antes do cd: $(pwd)"
+            msg_run 'cd /home/packages'
+            msg_raw "Diretório atual depois do cd: $(pwd)"
             branch="EXTRA"
-              ;;
-            *)
-            branch="TESTING"
-              ;;
-          esac
+            msg_raw "Branch definido como: $branch"
+            msg_raw "Conteúdo do diretório /home/packages:"
+            msg_run "ls -la /home/packages"
+        else
+            msg_run 'cd /home/packages'
+            msg_info '# Set the branch based on BRANCH_TYPE'
+            case "${{ inputs.branch_type }}" in
+                "stable")
+                branch="STABLE"
+                    ;;
+                "extra")
+                branch="EXTRA"
+                    ;;
+                *)
+                branch="TESTING"
+                    ;;
+            esac
         fi
+
+        # Logs de configuração do ambiente
+        msg_info "=== Configuração do ambiente ==="
+        msg_raw "Build Environment: ${{ inputs.build_env }}"
+        msg_raw "Branch Type: ${{ inputs.branch_type }}"
+        msg_raw "Branch: $branch"
+        msg_raw "Repository Path: ${{ inputs.repo_dir }}"
+        msg_raw "IP: $ip"
         msg_run "ls -lha $PWD"
 
         # Upload the package files
         for i in *.pkg.tar.zst; do
-          pkgname=$(basename "$i")
-          pkgname_escaped=$(echo "$pkgname" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-          branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-          echo "PKGNAME_BASENAME=$pkgname_escaped"  >> $GITHUB_ENV
-          echo "PKGNAME_BRANCH=${branch_escaped,,}" >> $GITHUB_ENV
-          repo_path="${{ inputs.repo_dir }}"
-          file_size_bytes=$(stat -c%s "$i")
-          file_size_kb=$((file_size_bytes / 1024))
-          file_size_mb=$((file_size_kb / 1024))
+            msg_info "=== Processando arquivo: $i ==="
+            msg_raw "Arquivo existe? $([ -f "$i" ] && echo "Sim" || echo "Não")"
+            msg_raw "Caminho completo: $(readlink -f "$i")"
+            
+            pkgname=$(basename "$i")
+            pkgname_escaped=$(echo "$pkgname" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+            branch_escaped=$(echo "$branch" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+            echo "PKGNAME_BASENAME=$pkgname_escaped"  >> $GITHUB_ENV
+            echo "PKGNAME_BRANCH=${branch_escaped,,}" >> $GITHUB_ENV
+            repo_path="${{ inputs.repo_dir }}"
+            file_size_bytes=$(stat -c%s "$i")
+            file_size_kb=$((file_size_bytes / 1024))
+            file_size_mb=$((file_size_kb / 1024))
 
-          message="✅ <b>[step 2/4] build-package - ENVIANDO 📦 PARA REPOSITÓRIO</b>
-          <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
-          <b>Workflow:</b> <code>build-package/action.yml</code>
-          <b>Pacote:</b> <code>${branch_escaped,,}/${pkgname_escaped}</code>
-          <b>Tamanho b/Kb/Mb:</b> <code>${file_size_bytes}/${file_size_kb}/${file_size_mb}</code>
-          <b>Repositório:</b> <code>${repo_path}</code>
-          <b>Branch:</b> <code>${branch_escaped}</code>"
-          msg_ok "$message"
-          send_telegram_message "$message"
-
-          if rsync --itemize-changes -apz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/; then
-            message="✅ <b>[step 3/6] build-package - Sucesso no envio do pacote</b>
+            message="✅ <b>[step 2/4] build-package - ENVIANDO 📦 PARA REPOSITÓRIO</b>
             <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
             <b>Workflow:</b> <code>build-package/action.yml</code>
-            <b>Pacote:</b> <code>${pkgname_escaped}</code>
+            <b>Pacote:</b> <code>${branch_escaped,,}/${pkgname_escaped}</code>
+            <b>Tamanho b/Kb/Mb:</b> <code>${file_size_bytes}/${file_size_kb}/${file_size_mb}</code>
+            <b>Repositório:</b> <code>${repo_path}</code>
             <b>Branch:</b> <code>${branch_escaped}</code>"
-            #send_telegram_message "$message"
-            :
-          else
-            message="❌ <b>[step 3/6] build-package - Falha ao enviar pacote</b>
-            <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
-            <b>Workflow:</b> <code>build-package/action.yml</code>
-            <b>Pacote:</b> <code>${pkgname_escaped}</code>
-            <b>Branch:</b> <code>${branch_escaped}</code>"
+            msg_ok "$message"
             send_telegram_message "$message"
-          fi
+
+            # Log do comando rsync que será executado
+            msg_info "=== Comando rsync que será executado ==="
+            rsync_cmd="rsync --itemize-changes -apz -e \"ssh -p ${{ inputs.repo_port }}\" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/"
+            msg_raw "Comando rsync: $rsync_cmd"
+
+            if rsync --itemize-changes -v -apz -e "ssh -p ${{ inputs.repo_port }}" "$i" "${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/" 2>&1; then
+                message="✅ <b>[step 3/6] build-package - Sucesso no envio do pacote</b>
+                <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+                <b>Workflow:</b> <code>build-package/action.yml</code>
+                <b>Pacote:</b> <code>${pkgname_escaped}</code>
+                <b>Branch:</b> <code>${branch_escaped}</code>"
+                #send_telegram_message "$message"
+                :
+            else
+                message="❌ <b>[step 3/6] build-package - Falha ao enviar pacote</b>
+                <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+                <b>Workflow:</b> <code>build-package/action.yml</code>
+                <b>Pacote:</b> <code>${pkgname_escaped}</code>
+                <b>Branch:</b> <code>${branch_escaped}</code>"
+                send_telegram_message "$message"
+            fi
         done
 
+        # Log antes de processar arquivos .sig e .md5
+        msg_info "=== Processando arquivos .sig e .md5 ==="
+        msg_raw "Arquivos .sig e .md5 presentes:"
+        msg_run "ls -la *.sig *.md5 || echo 'Nenhum arquivo encontrado'"
+
         for i in *.sig *.md5; do
-          rsync --itemize-changes -apz -e "ssh -p ${{ inputs.repo_port }}" $i ${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/
+            msg_raw "Processando arquivo: $i"
+            if [ -f "$i" ]; then
+                msg_raw "Enviando arquivo: $i"
+                rsync --itemize-changes -v -apz -e "ssh -p ${{ inputs.repo_port }}" "$i" "${{ inputs.repo_user }}@$ip:${{ inputs.repo_dir }}/${branch,,}/x86_64/" 2>&1
+            fi
         done
         replicate '#'
 
@@ -746,9 +779,6 @@ runs:
         #send_telegram_message "$message"
 
         ssh "${{ inputs.repo_user }}@${{ inputs.repo_host }}" -p "${{ inputs.repo_port }}" << EOF
-          # Desabilitar erro de nomatch do ZSH
-          setopt +o nomatch 2>/dev/null || true
-
           # Criar estrutura de diretórios se não existir
           target_dir="${{ inputs.repo_dir }}/${{ inputs.branch_type }}/x86_64"
           mkdir -p "\${target_dir}"
@@ -761,47 +791,49 @@ runs:
           process_old_packages() {
             local pkg_pattern="*.pkg.tar.zst"
             local count=0
-
-            # Usar condição do ZSH para verificar existência de arquivos
-            if [[ -n *.pkg.tar.zst(N) ]]; then
-              # Usar find para listar todos os pacotes
-              find . -maxdepth 1 -type f -name "\${pkg_pattern}" | sort -Vr | \
-              awk -F/ '{split(\$NF,a,"-[0-9]"); if (seen[a[1]]++) print \$0}' | \
-              while read -r pkg; do
-                if [ -f "\${pkg}" ]; then
-                  count=\$((count + 1))
-                  echo "Removendo pacote antigo [\${count}]: \${pkg}"
-                  rm -f "\${pkg}" "\${pkg}.sig" "\${pkg}.md5"
-                fi
-              done
-            else
-              echo "Nenhum pacote encontrado para processar"
-            fi
+            
+            # Usar find para listar todos os pacotes
+            find . -maxdepth 1 -type f -name "\${pkg_pattern}" | sort -Vr | \
+            awk -F/ '{split(\$NF,a,"-[0-9]"); if (seen[a[1]]++) print \$0}' | \
+            while read -r pkg; do
+              if [ -f "\${pkg}" ]; then
+                count=\$((count + 1))
+                echo "Removendo pacote antigo [\${count}]: \${pkg}"
+                rm -f "\${pkg}" "\${pkg}.sig" "\${pkg}.md5"
+              fi
+            done
           }
 
           # Processar pacotes antigos
           echo "Processando pacotes antigos..."
           process_old_packages
 
-          # Remover os bancos de dados existentes
-          rm -f ${db_name}.db.tar.gz ${db_name}.files.tar.gz
+          # Remover e recriar banco de dados
+          echo "Atualizando banco de dados..."
+          rm -f "${db_name}.db.tar.gz" "${db_name}.files.tar.gz"
+          
+          # Verificar se existem pacotes antes de recriar o banco
+          if [[ -n *.pkg.tar.zst(N) ]]; then
+            echo "Recriando banco de dados com pacotes existentes..."
+            repo-add "${db_name}.db.tar.gz" *.pkg.tar.zst
+          else
+            echo "Nenhum pacote encontrado para adicionar ao banco de dados"
+          fi
 
-          # Recriar o banco de dados com os pacotes presentes
-          repo-add ${db_name}.db.tar.gz *.pkg.tar.zst
-
-          # Remover arquivos .sig e .md5 órfãos
-          for file in *.sig *.md5; do
-            base_name=\${file%.*}
+          # Limpar arquivos órfãos
+          echo "Procurando por arquivos órfãos..."
+          find . -maxdepth 1 -type f \( -name "*.sig" -o -name "*.md5" \) | while read -r file; do
+            base_name="\${file%.*}"
             if [ ! -f "\${base_name}" ]; then
-              echo "Removing orphaned file: \$file"
-              rm -f "\$file"
+              echo "Removendo arquivo órfão: \${file}"
+              rm -f "\${file}"
             fi
           done
 
           # Mostrar resultado final
           echo "Conteúdo final do diretório:"
           ls -la
-
+          
           exit 0
         EOF
         retval="$?"
