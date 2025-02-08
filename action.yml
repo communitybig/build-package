@@ -685,16 +685,12 @@ runs:
         # Upload the package files
         
         # Primeiro, renomear os arquivos com : para .
-        msg_info "=== Renomeando arquivos com ':' para '.' ==="
         for i in *.pkg.tar.zst; do
-            if [ -f "$i" ]; then
-                new_name=$(echo "$i" | sed 's/:/./')
-                if [ "$i" != "$new_name" ]; then
-                    msg_raw "Renomeando '$i' para '$new_name'"
-                    mv "$i" "$new_name"
-                    [ -f "$i.sig" ] && mv "$i.sig" "$new_name.sig"
-                    [ -f "$i.md5" ] && mv "$i.md5" "$new_name.md5"
-                fi
+            new_name=${i//:/.}
+            if [ "$i" != "$new_name" ]; then
+                mv "$i" "$new_name"
+                [ -f "$i.sig" ] && mv "$i.sig" "$new_name.sig"
+                [ -f "$i.md5" ] && mv "$i.md5" "$new_name.md5"
             fi
         done
 
