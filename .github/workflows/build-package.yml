@@ -198,7 +198,6 @@ jobs:
 
           # Parâmetros relacionados ao repositório
           repo_host: ${{ secrets.PKGBUILD_HOST }}
-          repo_user: "big"
           #repo_user: ${{ secrets.PKGBUILD_USER }}
           repo_port: ${{ secrets.PKGBUILD_PORT }}
           repo_dir: ${{ secrets.PKGBUILD_DIR }}

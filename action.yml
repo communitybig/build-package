@@ -790,8 +790,13 @@ runs:
         #send_telegram_message "$message"
 
         ssh "${{ inputs.repo_user }}@${{ inputs.repo_host }}" -p "${{ inputs.repo_port }}" << EOF
-          # Criar estrutura de diretórios se não existir
-          target_dir="${{ inputs.repo_dir }}/${{ inputs.branch_type }}/x86_64"
+          # Determinar o diretório correto baseado no branch_type
+          if [[ "${{ inputs.branch_type }}" == "aur" ]]; then
+            target_dir="${{ inputs.repo_dir }}/extra/x86_64"
+          else
+            target_dir="${{ inputs.repo_dir }}/${{ inputs.branch_type }}/x86_64"
+          fi
+          
           mkdir -p "\${target_dir}"
           cd "\${target_dir}" || exit 1
 
