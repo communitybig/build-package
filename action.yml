@@ -558,7 +558,7 @@ runs:
           # Executar chrootbuild com o branch determinado
           #sudo chrootbuild -H -p . -b ${build_branch}
 
-          if makepkg -s --noconfirm --noprogressbar --nodeps --skipchecksums; then
+          if makepkg -s --noconfirm --noprogressbar; then
             pkgname="${{ inputs.package_name }}"
             full_pkgname="$(find . -type f -iname "$pkgname*.pkg.tar.zst" -print)"
             msg_raw "full_pkgname : $full_pkgname"
